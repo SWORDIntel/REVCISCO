@@ -209,4 +209,4 @@ For issues, questions, or contributions, please open an issue on GitHub.
 
 ---
 
-**Made with ❤️ for network engineers**
+**Made with ❤️ for network engineers(Except that one BT engineer i accidentally may have stolen the ISR off in the 3.2 seconds his back was turned,NEXT TIME BRO DONT KEEP YOUR SHIT ONTOP OF THE TRASH IM A GREMLIN)**
