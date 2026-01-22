@@ -187,7 +187,7 @@ source venv/bin/activate
 
 ## 🔒 Security
 
-**⚠️ IMPORTANT**: This tool is for authorized password recovery only. Use responsibly and only on devices you own or have explicit permission to access.
+**⚠️ IMPORTANT**: This tool is for author..ah who am i kidding idgaf hell i may or may not have stolen the ISR im using this on
 
 ## 📝 License
 
