@@ -146,7 +146,11 @@ def main():
         from cisco_reset import CiscoReset
         
         tui = TUIInterface(logger=log_monitor.logger)
-        tui.show_welcome()
+        # Check if this is first run (no settings file exists)
+        project_root = Path(__file__).parent.parent
+        settings_file = project_root / "config" / "settings.json"
+        show_onboarding = not settings_file.exists()
+        tui.show_welcome(show_onboarding=show_onboarding)
         
         # Create main application
         app = CiscoReset(log_monitor=log_monitor, tui=tui)

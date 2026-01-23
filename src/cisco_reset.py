@@ -5,6 +5,7 @@ Main tool script for Cisco 4321 ISR Password Reset
 import argparse
 import sys
 import time
+import logging
 from pathlib import Path
 from typing import Optional
 
@@ -21,6 +22,7 @@ from system_detector import SystemDetector
 from interactive_config import InteractiveConfig
 from config_backup import ConfigBackup
 from tui_interface import TUIInterface
+from settings_manager import SettingsManager
 
 
 class CiscoReset:
@@ -59,6 +61,15 @@ class CiscoReset:
         project_root = Path(__file__).parent.parent
         self.config_backup = ConfigBackup(backup_dir=str(project_root / "backups"), logger=self.log_monitor.logger)
         
+        # Initialize settings manager
+        self.settings_manager = SettingsManager(
+            config_dir=str(project_root / "config"),
+            logger=self.log_monitor.logger
+        )
+        
+        # Auto-reconnect flag
+        self.auto_reconnect_enabled = self.settings_manager.get("auto_reconnect", True)
+        
     def connect(self, port: Optional[str] = None, baudrate: int = 9600) -> bool:
         """Connect to router"""
         self.log_monitor.logger.info("Connecting to router...")
@@ -74,22 +85,35 @@ class CiscoReset:
         
         # Auto-detect port if not provided
         if not port:
-            detected_ports = self.serial_conn.detect_ports()
-            if not detected_ports:
-                self.log_monitor.logger.error("No TTY ports found")
-                return False
+            # Try to use last port from settings
+            last_port = self.settings_manager.get("last_port")
+            if last_port and Path(last_port).exists():
+                if self.tui.confirm(f"Use last port {last_port}?", default=True):
+                    port = last_port
             
-            if len(detected_ports) == 1:
-                port = detected_ports[0]
-            else:
-                # Use TUI to select port
-                port = self.tui.show_port_selection(detected_ports)
-                if not port:
+            if not port:
+                detected_ports = self.serial_conn.detect_ports()
+                if not detected_ports:
+                    self.log_monitor.logger.error("No TTY ports found")
                     return False
+                
+                if len(detected_ports) == 1:
+                    port = detected_ports[0]
+                else:
+                    # Use TUI to select port
+                    port = self.tui.show_port_selection(detected_ports)
+                    if not port:
+                        return False
+        
+        # Save last used port
+        self.settings_manager.set("last_port", port)
         
         # Open connection
         if not self.serial_conn.open(port, baudrate):
             return False
+        
+        # Record connection start time
+        self.log_monitor.metrics.start_connection()
         
         # Initialize command executor
         self.command_executor = CommandExecutor(
@@ -230,6 +254,34 @@ class CiscoReset:
             choice = self.tui.show_main_menu(connection_status=status)
             
             if choice == "1":
+                # Guided workflow
+                if self.tui.show_guided_workflow():
+                    # Now connect and run workflow
+                    if not self.serial_conn:
+                        self.serial_conn = SerialConnection(
+                            logger=self.log_monitor.logger,
+                            metrics=self.log_monitor.metrics
+                        )
+                    ports = self.serial_conn.detect_ports()
+                    port = self.tui.show_port_selection(ports)
+                    if port:
+                        with self.tui.show_progress("Connecting to router"):
+                            if self.connect(port):
+                                self.tui.show_success_message(f"Connected to {port}")
+                                # Run the password reset workflow
+                                self.run_password_reset_workflow()
+                            else:
+                                self.tui.show_error_dialog(
+                                    "Connection Failed",
+                                    f"Failed to connect to {port}",
+                                    [
+                                        "Check cable connection",
+                                        "Verify port permissions (user in dialout group)",
+                                        "Check if port is already in use",
+                                        "Try a different port"
+                                    ]
+                                )
+            elif choice == "2":
                 # Connect to router
                 if not self.serial_conn:
                     self.serial_conn = SerialConnection(
@@ -253,7 +305,7 @@ class CiscoReset:
                                     "Try a different port"
                                 ]
                             )
-            elif choice == "2":
+            elif choice == "3":
                 # Password reset workflow
                 if not self.serial_conn or not self.serial_conn.is_open():
                     self.tui.show_error_dialog(
@@ -281,7 +333,7 @@ class CiscoReset:
                 
                 if self.tui.confirm("Continue?", default=True):
                     self.run_password_reset_workflow()
-            elif choice == "3":
+            elif choice == "4":
                 # System detection
                 if not self.serial_conn or not self.serial_conn.is_open():
                     self.tui.show_error_dialog(
@@ -298,7 +350,7 @@ class CiscoReset:
                         if export_format:
                             export_file = self.system_detector.export_results(export_format)
                             self.tui.show_success_message(f"Results exported to {export_file}")
-            elif choice == "4":
+            elif choice == "5":
                 # Interactive command mode
                 if not self.command_executor:
                     self.tui.show_error_dialog(
@@ -317,13 +369,95 @@ class CiscoReset:
                 )
                 interactive = InteractiveConfig(self.command_executor, logger=self.log_monitor.logger)
                 interactive.start()
-            elif choice == "5":
-                # View logs
-                self.tui.show_status("Log viewer not yet implemented", "warning")
+                
+                # Auto-reconnect if connection was lost
+                if self.auto_reconnect_enabled and (not self.serial_conn or not self.serial_conn.is_open()):
+                    last_port = self.settings_manager.get("last_port")
+                    if last_port:
+                        self.tui.show_status("Connection lost, attempting to reconnect...", "warning")
+                        if self.connect(last_port):
+                            self.tui.show_success_message("Reconnected successfully")
+                        else:
+                            self.tui.show_error_dialog("Reconnection Failed", "Could not reconnect to router", 
+                                                      ["Check cable connection", "Verify port is available"])
             elif choice == "6":
-                # Settings
-                self.tui.show_status("Settings not yet implemented", "warning")
+                # View logs
+                project_root = Path(__file__).parent.parent
+                log_dir = str(project_root / "logs")
+                self.tui.show_log_viewer(log_dir)
             elif choice == "7":
+                # Settings
+                current_settings = self.settings_manager.get_all()
+                updated = self.tui.show_settings_menu(current_settings)
+                if updated:
+                    if updated == {}:  # Reset to defaults
+                        # Reload defaults
+                        self.settings_manager = SettingsManager(
+                            config_dir=str(Path(__file__).parent.parent / "config"),
+                            logger=self.log_monitor.logger
+                        )
+                        self.tui.show_success_message("Settings reset to defaults")
+                    else:
+                        # Update specific settings
+                        self.settings_manager.update(updated)
+                        self.tui.show_success_message("Settings updated")
+                        
+                        # Apply settings that affect runtime
+                        if "log_level" in updated:
+                            self.log_monitor.logger.setLevel(getattr(logging, updated["log_level"].upper(), logging.INFO))
+            elif choice == "9":
+                # Show metrics
+                metrics = self.log_monitor.get_current_metrics()
+                self.tui.show_metrics(metrics)
+            elif choice == "10":
+                # Configuration backup/restore
+                if not self.command_executor:
+                    self.tui.show_error_dialog(
+                        "Not Connected",
+                        "Please connect to router first",
+                        ["Select option 1 to connect"]
+                    )
+                    time.sleep(2)
+                    continue
+                
+                project_root = Path(__file__).parent.parent
+                backup_dir = str(project_root / "backups")
+                self.tui.show_backup_menu(backup_dir, self.command_executor)
+            elif choice == "11":
+                # Individual detection options
+                if not self.command_executor or not self.system_detector:
+                    self.tui.show_error_dialog(
+                        "Not Connected",
+                        "Please connect to router first",
+                        ["Select option 1 to connect"]
+                    )
+                    time.sleep(2)
+                    continue
+                
+                self.tui.show_individual_detection_menu(self.system_detector)
+            elif choice == "12":
+                # Advanced password reset options
+                if not self.command_executor or not self.password_reset:
+                    self.tui.show_error_dialog(
+                        "Not Connected",
+                        "Please connect to router first",
+                        ["Select option 1 to connect"]
+                    )
+                    time.sleep(2)
+                    continue
+                
+                # Verify privileged access
+                if not self.password_reset.verify_privileged_access():
+                    self.tui.show_error_dialog(
+                        "Privileged Access Required",
+                        "Router must be in privileged mode (no password) to use advanced password reset options",
+                        ["Run password reset workflow first (option 2)", "Or ensure router is in privileged mode"]
+                    )
+                    time.sleep(2)
+                    continue
+                
+                self.tui.show_advanced_password_reset_menu(self.password_reset)
+            elif choice == "8":
                 # Exit
                 break
         
