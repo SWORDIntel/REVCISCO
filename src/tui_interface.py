@@ -151,17 +151,20 @@ This tool will help you reset the password on your Cisco 4321 ISR router.
             menu_table.add_column(style="white")
             
             menu_items = [
-                ("1", "Connect to Router"),
-                ("2", "Password Reset Workflow"),
-                ("3", "System Detection/Inventory"),
-                ("4", "Interactive Command Mode"),
-                ("5", "View Logs"),
-                ("6", "Settings"),
-                ("7", "Exit"),
-                ("8", "View Metrics"),
-                ("9", "Configuration Backup/Restore"),
-                ("10", "Individual Detection Options"),
-                ("11", "Advanced Password Reset")
+                ("1", "Guided Cisco 4321 ISR Reset"),
+                ("2", "Connect to Cisco 4321 ISR"),
+                ("3", "Password Reset Workflow"),
+                ("4", "System Detection/Inventory"),
+                ("5", "Interactive Command Mode"),
+                ("6", "View Logs"),
+                ("7", "Settings"),
+                ("8", "Exit"),
+                ("9", "View Metrics"),
+                ("10", "Configuration Backup/Restore"),
+                ("11", "Individual Detection Options"),
+                ("12", "Advanced Password Reset"),
+                ("13", "UART Firmware Dump"),
+                ("14", "Decompress Firmware Dump")
             ]
             
             for num, desc in menu_items:
@@ -178,14 +181,14 @@ This tool will help you reset the password on your Cisco 4321 ISR router.
             
             choice = Prompt.ask(
                 "[bold cyan]Select option[/bold cyan]",
-                choices=["1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12"],
+                choices=["1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14"],
                 default="1"
             )
         else:
             print(f"\nConnection Status: {connection_status}")
             print("\nMain Menu:")
-            print("1. Guided Workflow (Step-by-Step)")
-            print("2. Connect to Router")
+            print("1. Guided Cisco 4321 ISR Reset")
+            print("2. Connect to Cisco 4321 ISR")
             print("3. Password Reset Workflow")
             print("4. System Detection/Inventory")
             print("5. Interactive Command Mode")
@@ -196,9 +199,308 @@ This tool will help you reset the password on your Cisco 4321 ISR router.
             print("10. Configuration Backup/Restore")
             print("11. Individual Detection Options")
             print("12. Advanced Password Reset")
-            choice = input("\nSelect option [1-12]: ").strip() or "1"
+            print("13. UART Firmware Dump")
+            print("14. Decompress Firmware Dump")
+            choice = input("\nSelect option [1-14]: ").strip() or "1"
         
         return choice
+
+    def show_cisco_4321_preflight(self, ports: list, baudrate: int = 9600,
+                                  in_dialout_group: bool = False) -> bool:
+        """Show Cisco 4321 ISR-specific preflight checks."""
+        port_text = "\n".join(f"  - {port}" for port in ports) if ports else "  - No serial ports detected"
+        permission = "OK" if in_dialout_group else "Needs attention"
+        permission_detail = (
+            "Current user is in the dialout group."
+            if in_dialout_group
+            else "Current user may need dialout group access for /dev/tty* ports."
+        )
+
+        content = (
+            "Target router: Cisco 4321 ISR / ISR4321\n\n"
+            "Expected console settings:\n"
+            f"  - Baud rate: {baudrate}\n"
+            "  - Data bits: 8\n"
+            "  - Parity: none\n"
+            "  - Stop bits: 1\n"
+            "  - Flow control: none\n\n"
+            f"Detected serial ports:\n{port_text}\n\n"
+            f"Linux serial permission: {permission}\n"
+            f"  - {permission_detail}"
+        )
+
+        if self.console:
+            self.console.clear()
+            self.show_info_panel("Cisco 4321 ISR Preflight", content)
+            self.console.print()
+            if not ports:
+                self.show_error_dialog(
+                    "No Serial Port Detected",
+                    "No console port was found before starting the Cisco 4321 ISR workflow.",
+                    [
+                        "Check the console cable",
+                        "Try a different USB port",
+                        "Verify /dev/ttyUSB*, /dev/ttyACM*, or /dev/ttyS* exists",
+                        "Confirm dialout group access"
+                    ]
+                )
+                return False
+            return self.confirm("Continue with these Cisco 4321 ISR console settings?", default=True)
+
+        print("\nCisco 4321 ISR Preflight")
+        print("-" * 80)
+        print(content)
+        if not ports:
+            return False
+        return self.confirm("Continue with these Cisco 4321 ISR console settings?", default=True)
+
+    def show_uart_dump_menu(self, default_output_file: str) -> Optional[Dict[str, Any]]:
+        """Collect raw UART firmware/image dump settings."""
+        if self.console:
+            self.console.clear()
+            self.show_info_panel(
+                "UART Firmware Dump",
+                "Capture raw bytes from the connected Cisco 4321 ISR console/UART directly to a file.\n\n"
+                "Use this only when the router or bootloader is already transmitting an image/firmware stream. "
+                "The capture stops at the expected byte count, after idle timeout, or at the maximum timeout."
+            )
+            self.console.print()
+            if not self.confirm("Start a raw UART capture session?", default=False):
+                return None
+
+            output_file = Prompt.ask("Output file", default=default_output_file)
+            size_text = Prompt.ask("Expected bytes (blank for unknown)", default="").strip()
+            timeout = IntPrompt.ask("Maximum capture time in seconds", default=3600)
+            idle_timeout = IntPrompt.ask("Stop after idle seconds", default=10)
+        else:
+            print("\nUART Firmware Dump")
+            print("-" * 80)
+            print("Capture raw bytes from the connected UART to a file.")
+            if not self.confirm("Start a raw UART capture session?", default=False):
+                return None
+            output_file = input(f"Output file [{default_output_file}]: ").strip() or default_output_file
+            size_text = input("Expected bytes (blank for unknown): ").strip()
+            timeout = int(input("Maximum capture time in seconds [3600]: ").strip() or "3600")
+            idle_timeout = int(input("Stop after idle seconds [10]: ").strip() or "10")
+
+        expected_size = None
+        if size_text:
+            try:
+                expected_size = int(size_text.replace("_", "").replace(",", ""))
+            except ValueError:
+                self.show_error_dialog("Invalid Size", "Expected bytes must be a whole number")
+                return None
+
+        return {
+            "output_file": output_file,
+            "expected_size": expected_size,
+            "timeout": float(timeout),
+            "idle_timeout": float(idle_timeout)
+        }
+
+    def show_uart_dump_result(self, result: Dict[str, Any]) -> None:
+        """Show raw UART dump result."""
+        bytes_written = result.get("bytes_written", 0)
+        duration = result.get("duration", 0)
+        reason = result.get("reason", "unknown")
+        output_file = result.get("output_file", "unknown")
+        expected_size = result.get("expected_size")
+        expected_text = f"\nExpected: {expected_size:,} bytes" if expected_size is not None else ""
+        content = (
+            f"File: {output_file}\n"
+            f"Captured: {bytes_written:,} bytes{expected_text}\n"
+            f"Duration: {duration:.1f}s\n"
+            f"Stopped by: {reason}"
+        )
+        if self.console:
+            self.console.print(Panel(
+                content,
+                title="[bold green]UART Dump Complete[/bold green]",
+                border_style="green",
+                padding=(1, 2)
+            ))
+            Prompt.ask("[bold cyan]Press Enter to continue[/bold cyan]", default="")
+        else:
+            print("\nUART Dump Complete")
+            print("-" * 80)
+            print(content)
+            input("\nPress Enter to continue...")
+
+    def show_decompression_menu(self, default_dir: str) -> Optional[Dict[str, Any]]:
+        """Collect decompression settings for an existing firmware dump."""
+        formats = ["auto", "gzip", "bzip2", "xz", "zip", "tar", "zlib", "binwalk"]
+
+        if self.console:
+            self.console.clear()
+            self.show_info_panel(
+                "Decompress Firmware Dump",
+                "Decompress or extract a captured UART dump. Auto-detect handles gzip, bzip2, xz, zip, tar, "
+                "and common zlib/deflate streams. Choose binwalk for broader firmware carving/extraction."
+            )
+            self.console.print()
+            default_input = str(Path(default_dir) / "uart_dump.bin")
+            input_file = Prompt.ask("Input dump file", default=default_input)
+            output_path = Prompt.ask("Output path (blank for automatic)", default="").strip() or None
+            format_hint = Prompt.ask("Format", choices=formats, default="auto")
+        else:
+            print("\nDecompress Firmware Dump")
+            print("-" * 80)
+            input_file = input(f"Input dump file [{Path(default_dir) / 'uart_dump.bin'}]: ").strip()
+            if not input_file:
+                input_file = str(Path(default_dir) / "uart_dump.bin")
+            output_path = input("Output path (blank for automatic): ").strip() or None
+            format_hint = input("Format [auto/gzip/bzip2/xz/zip/tar/zlib/binwalk] [auto]: ").strip() or "auto"
+            if format_hint not in formats:
+                self.show_error_dialog("Invalid Format", f"Unsupported format: {format_hint}")
+                return None
+
+        return {
+            "input_file": input_file,
+            "output_path": output_path,
+            "format_hint": format_hint
+        }
+
+    def show_decompression_result(self, result: Dict[str, Any]) -> None:
+        """Show decompression result."""
+        content = (
+            f"Input: {result.get('input_file', 'unknown')}\n"
+            f"Output: {result.get('output_path', 'unknown')}\n"
+            f"Format: {result.get('format', 'unknown')}"
+        )
+
+        if self.console:
+            self.console.print(Panel(
+                content,
+                title="[bold green]Decompression Complete[/bold green]",
+                border_style="green",
+                padding=(1, 2)
+            ))
+            Prompt.ask("[bold cyan]Press Enter to continue[/bold cyan]", default="")
+        else:
+            print("\nDecompression Complete")
+            print("-" * 80)
+            print(content)
+            input("\nPress Enter to continue...")
+
+    def show_recovery_resume_notice(self, state: Dict[str, Any]) -> None:
+        """Warn about an incomplete previous recovery workflow."""
+        phase = state.get("phase", "unknown")
+        next_step = state.get("next_step", "Review router state before continuing.")
+        timestamp = state.get("timestamp", "unknown")
+        details = state.get("details", {})
+        detail_text = ""
+        if details:
+            detail_text = "\n\nDetails:\n" + "\n".join(f"  - {key}: {value}" for key, value in details.items())
+
+        content = (
+            f"Previous recovery phase: {phase}\n"
+            f"Recorded at: {timestamp}\n\n"
+            f"Recommended next step:\n  {next_step}"
+            f"{detail_text}"
+        )
+
+        if self.console:
+            self.console.clear()
+            self.show_error_dialog(
+                "Incomplete Recovery Detected",
+                content,
+                [
+                    "Connect to the Cisco 4321 ISR before continuing",
+                    "If config-register was set to 0x2142, restore 0x2102 before finishing",
+                    "Use Advanced Password Reset > Restore Config Register if IOS is available"
+                ]
+            )
+            Prompt.ask("[bold cyan]Press Enter to continue[/bold cyan]", default="")
+        else:
+            print("\nIncomplete Recovery Detected")
+            print("-" * 80)
+            print(content)
+            input("\nPress Enter to continue...")
+
+    def show_router_identity(self, identity: Dict[str, Any]) -> None:
+        """Show best-effort Cisco 4321 ISR identity check results."""
+        status = identity.get("status", "Unknown")
+        model = identity.get("model", "Unknown")
+        serial = identity.get("serial", "Unknown")
+        ios_version = identity.get("ios_version", "Unknown")
+        is_4321 = identity.get("is_4321", False)
+        border = "green" if is_4321 else "yellow"
+        content = (
+            f"Status: {status}\n\n"
+            f"Model/PID: {model}\n"
+            f"Serial: {serial}\n"
+            f"IOS XE/IOS: {ios_version}"
+        )
+
+        if self.console:
+            self.console.print()
+            self.console.print(Panel(
+                content,
+                title="[bold cyan]Cisco 4321 ISR Identity Check[/bold cyan]",
+                border_style=border,
+                padding=(1, 2)
+            ))
+            self.console.print()
+        else:
+            print("\nCisco 4321 ISR Identity Check")
+            print("-" * 80)
+            print(content)
+
+    def show_break_failure_menu(self) -> str:
+        """Offer recovery choices when automated break sequence fails."""
+        if self.console:
+            self.show_error_dialog(
+                "ROMmon Break Not Detected",
+                "The tool did not detect a Cisco 4321 ISR rommon prompt after automated break attempts.",
+                [
+                    "Break must land early in boot",
+                    "Power cycle and retry if IOS has already started",
+                    "Manual ROMmon commands can still be used"
+                ]
+            )
+            self.console.print()
+            choice = Prompt.ask(
+                "[bold cyan]Next action[/bold cyan]",
+                choices=["retry", "manual", "abort"],
+                default="retry"
+            )
+            return choice
+
+        print("\nROMmon Break Not Detected")
+        print("1. Retry break sequence")
+        print("2. Show manual ROMmon assistant")
+        print("3. Abort workflow")
+        choice = input("Select option [1-3]: ").strip() or "1"
+        return {"1": "retry", "2": "manual", "3": "abort"}.get(choice, "abort")
+
+    def show_rommon_manual_assistant(self) -> None:
+        """Show manual Cisco 4321 ISR ROMmon recovery commands."""
+        content = (
+            "Use this when automated break timing fails.\n\n"
+            "1. Power cycle the Cisco 4321 ISR.\n"
+            "2. Send your terminal's break signal during early boot.\n"
+            "3. At the rommon prompt, run:\n\n"
+            "   rommon 1 > confreg 0x2142\n"
+            "   rommon 2 > reset\n\n"
+            "After IOS boots without startup config, return here and continue the workflow.\n"
+            "Before finishing, restore normal boot with:\n\n"
+            "   Router(config)# config-register 0x2102\n"
+            "   Router# write memory"
+        )
+
+        if self.console:
+            self.console.print(Panel(
+                content,
+                title="[bold yellow]Manual Cisco 4321 ISR ROMmon Assistant[/bold yellow]",
+                border_style="yellow",
+                padding=(1, 2)
+            ))
+            Prompt.ask("[bold cyan]Press Enter after trying manual ROMmon entry[/bold cyan]", default="")
+        else:
+            print("\nManual Cisco 4321 ISR ROMmon Assistant")
+            print("-" * 80)
+            print(content)
+            input("\nPress Enter after trying manual ROMmon entry...")
     
     def show_port_selection(self, ports: list) -> Optional[str]:
         """Show port selection menu"""

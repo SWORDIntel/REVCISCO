@@ -126,15 +126,18 @@
 
 **Overall Assessment**: ✅ **ALL RECOMMENDATIONS IMPLEMENTED** - Comprehensive TUI access to all functionality. All critical and recommended functions are now accessible via the menu system.
 
-### Menu Options (11 Total)
-1. Connect to Router
-2. Password Reset Workflow
-3. System Detection/Inventory
-4. Interactive Command Mode
-5. View Logs
-6. Settings
-7. Exit
-8. View Metrics
-9. Configuration Backup/Restore ✅ NEW
-10. Individual Detection Options ✅ NEW
-11. Advanced Password Reset ✅ NEW
+### Menu Options (14 Total)
+1. Guided Cisco 4321 ISR Reset
+2. Connect to Cisco 4321 ISR
+3. Password Reset Workflow
+4. System Detection/Inventory
+5. Interactive Command Mode
+6. View Logs
+7. Settings
+8. Exit
+9. View Metrics
+10. Configuration Backup/Restore ✅ NEW
+11. Individual Detection Options ✅ NEW
+12. Advanced Password Reset ✅ NEW
+13. UART Firmware Dump ✅ NEW
+14. Decompress Firmware Dump ✅ NEW

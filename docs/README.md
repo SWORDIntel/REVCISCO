@@ -65,6 +65,7 @@ CISCORESET/
 ├── logs/                 # Log files (auto-created)
 ├── monitoring/           # Monitoring data (auto-created)
 ├── backups/             # Configuration backups (auto-created)
+├── firmware_dumps/      # Raw UART firmware/image captures (auto-created)
 └── venv/                # Virtual environment (auto-created)
 ```
 

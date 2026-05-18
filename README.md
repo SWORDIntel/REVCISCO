@@ -161,7 +161,7 @@ START
 
 ### Core Features
 - **🎯 Guided Workflow** - Step-by-step instructions with physical action prompts
-- **🖥️ Beautiful TUI Interface** - Rich library-based Text User Interface with 12 menu options
+- **🖥️ Beautiful TUI Interface** - Rich library-based Text User Interface with 14 menu options
 - **🔄 Automatic Break Sequence** - 5 fallback methods with intelligent retry logic
 - **⚙️ ROM Monitor Automation** - Full automation of password recovery workflow
 - **🔍 System Detection** - Comprehensive license, hardware, software, and feature detection
@@ -170,6 +170,12 @@ START
 - **🛡️ Multiple Retry Strategies** - Exponential backoff, linear, fixed delay, and adaptive retries
 - **📁 State Machine** - Robust state tracking with rollback capabilities
 - **💾 Configuration Backup** - Automatic backup and restore of router configurations
+- **✅ Cisco 4321 ISR Preflight** - Confirms expected console settings, serial ports, and Linux permissions
+- **🔎 Router Identity Check** - Best-effort model, serial, and IOS XE verification after manual connection
+- **🧭 Recovery Resume Warning** - Flags interrupted recoveries, especially after `confreg 0x2142`
+- **🛠️ ROMmon Failure Assistant** - Retry/manual guidance when automated break timing fails
+- **📥 UART Firmware Dump** - Capture raw UART byte streams to `firmware_dumps/*.bin`
+- **📦 Dump Decompression** - Decompress gzip, bzip2, xz, zip, tar, zlib, and optional binwalk extraction
 
 ### Advanced Features
 - **⚙️ Settings Management** - Persistent settings with JSON storage
@@ -222,6 +228,7 @@ CISCORESET/
 ├── logs/                      # Log files (auto-created)
 ├── monitoring/                # Monitoring data (auto-created)
 ├── backups/                   # Configuration backups (auto-created)
+├── firmware_dumps/            # Raw UART firmware/image captures (auto-created)
 └── venv/                      # Virtual environment (auto-created)
 ```
 
@@ -235,7 +242,7 @@ CISCORESET/
    python src/bootstrap.py
    ```
 
-2. **Select Option 1: Guided Workflow**
+2. **Select Option 1: Guided Cisco 4321 ISR Reset**
    - Follow on-screen instructions
    - Perform physical actions when prompted:
      - Turn OFF router
@@ -245,7 +252,7 @@ CISCORESET/
 
 ### Manual Workflow
 
-1. **Connect to Router** (Option 2)
+1. **Connect to Cisco 4321 ISR** (Option 2)
    - Select TTY port from list
    - Connection is established automatically
 
@@ -262,8 +269,8 @@ CISCORESET/
 
 | Option | Function | Description |
 |--------|----------|-------------|
-| 1 | Guided Workflow | Step-by-step instructions with physical prompts |
-| 2 | Connect to Router | Manual connection to router |
+| 1 | Guided Cisco 4321 ISR Reset | Step-by-step instructions with physical prompts and 4321 ISR preflight |
+| 2 | Connect to Cisco 4321 ISR | Manual connection with Cisco console settings check |
 | 3 | Password Reset Workflow | Automated password reset process |
 | 4 | System Detection | Detect licenses, hardware, software |
 | 5 | Interactive Command Mode | Execute Cisco IOS commands directly |
@@ -274,6 +281,8 @@ CISCORESET/
 | 10 | Configuration Backup/Restore | Backup and restore router configs |
 | 11 | Individual Detection Options | Run specific detection functions |
 | 12 | Advanced Password Reset | Reset individual password types |
+| 13 | UART Firmware Dump | Capture a raw firmware/image stream from UART to a file |
+| 14 | Decompress Firmware Dump | Decompress or extract a captured UART dump |
 
 ## 🔧 Prerequisites
 
@@ -282,6 +291,10 @@ CISCORESET/
 - **Direct TTY Connection** - Physical connection to Cisco 4321 ISR console port
 - **Serial/TTY Cable** - Console cable connected to router and computer
 - **sudo Access** - For adding user to dialout group (one-time setup)
+- **binwalk Optional** - Used for broader firmware carving/extraction. Install with:
+  ```bash
+  cargo install --git https://github.com/ReFirmLabs/binwalk.git binwalk
+  ```
 
 ## 📦 Installation
 
@@ -341,6 +354,17 @@ See [docs/INSTALL.md](docs/INSTALL.md) for detailed manual installation instruct
 2. Select: Option 10 (Configuration Backup/Restore)
 3. Choose: Backup Running Configuration
 4. File saved to backups/ directory
+```
+
+### UART Firmware Capture And Analysis
+
+```
+1. Connect to router or UART source (Option 2)
+2. Start the router/bootloader firmware stream
+3. Select: Option 13 (UART Firmware Dump)
+4. Save the raw capture under firmware_dumps/
+5. Select: Option 14 (Decompress Firmware Dump)
+6. Use auto for common compression or binwalk for firmware carving
 ```
 
 ## 🧪 Testing

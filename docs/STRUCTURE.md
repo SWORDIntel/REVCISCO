@@ -47,6 +47,8 @@ CISCORESET/
 │
 ├── backups/                  # Configuration backups (auto-created)
 │   └── running_config_YYYYMMDD_HHMMSS.txt
+├── firmware_dumps/           # Raw UART firmware/image captures (auto-created)
+│   └── uart_dump_YYYYMMDD_HHMMSS.bin
 │
 └── venv/                     # Virtual environment (auto-created)
     ├── bin/
@@ -61,7 +63,7 @@ The `bootstrap.sh` script performs:
 1. **Python Check**: Verifies Python 3.7+ is installed
 2. **Virtual Environment**: Creates isolated Python environment
 3. **Dependencies**: Installs pyserial, rich, textual
-4. **Directories**: Creates logs/, monitoring/, backups/, config/
+4. **Directories**: Creates logs/, monitoring/, backups/, config/, firmware_dumps/
 5. **User Setup**: Adds user to dialout group (for serial port access)
 6. **Permissions**: Makes scripts executable
 7. **Verification**: Tests imports and basic functionality

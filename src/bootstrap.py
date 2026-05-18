@@ -5,6 +5,8 @@ Single auto-bootstrapping entry point for Cisco 4321 ISR Password Reset Tool
 
 import sys
 import os
+import shutil
+import subprocess
 import time
 from pathlib import Path
 
@@ -32,6 +34,11 @@ def check_dependencies():
         import rich
     except ImportError:
         missing.append("rich")
+
+    try:
+        import textual
+    except ImportError:
+        missing.append("textual")
     
     if missing:
         print(f"\n[!] Missing dependencies: {', '.join(missing)}")
@@ -61,11 +68,33 @@ def check_dependencies():
     
     print("✓ All dependencies available")
 
+def check_optional_tools():
+    """Check optional external tools."""
+    binwalk_path = shutil.which("binwalk")
+    cargo_binwalk = Path.home() / ".cargo" / "bin" / "binwalk"
+    if cargo_binwalk.exists():
+        binwalk_path = str(cargo_binwalk)
+
+    if not binwalk_path:
+        print("! Optional tool missing: binwalk")
+        print("  Install for firmware carving: cargo install --git https://github.com/ReFirmLabs/binwalk.git binwalk")
+        return
+
+    try:
+        result = subprocess.run([binwalk_path, "--help"], capture_output=True, text=True, timeout=10)
+        if result.returncode == 0:
+            print(f"✓ Optional tool available: binwalk ({binwalk_path})")
+        else:
+            print(f"! Optional tool found but not working: {binwalk_path}")
+            print("  Recommended fix: cargo install --git https://github.com/ReFirmLabs/binwalk.git binwalk")
+    except Exception as e:
+        print(f"! Optional tool check failed for binwalk: {e}")
+
 def initialize_directories():
     """Initialize required directories"""
     # Get project root (parent of src directory)
     base_dir = Path(__file__).parent.parent
-    dirs = ['logs', 'monitoring', 'backups', 'config']
+    dirs = ['logs', 'monitoring', 'backups', 'config', 'firmware_dumps']
     for dir_name in dirs:
         (base_dir / dir_name).mkdir(exist_ok=True)
 
@@ -106,6 +135,15 @@ def main():
         print("Checking dependencies...")
         check_dependencies()
         print("✓ Dependencies OK")
+
+    # Check optional tools
+    if console:
+        with console.status("[bold green]Checking optional tools...") as status:
+            check_optional_tools()
+            status.update("[bold green]✓ Optional tool check complete")
+    else:
+        print("Checking optional tools...")
+        check_optional_tools()
     
     # Initialize directories
     if console:
