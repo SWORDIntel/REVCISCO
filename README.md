@@ -161,7 +161,7 @@ START
 
 ### Core Features
 - **🎯 Guided Workflow** - Step-by-step instructions with physical action prompts
-- **🖥️ Beautiful TUI Interface** - Rich library-based Text User Interface with 14 menu options
+- **🖥️ Beautiful TUI Interface** - Rich library-based Text User Interface with 15 menu options
 - **🔄 Automatic Break Sequence** - 5 fallback methods with intelligent retry logic
 - **⚙️ ROM Monitor Automation** - Full automation of password recovery workflow
 - **🔍 System Detection** - Comprehensive license, hardware, software, and feature detection
@@ -170,6 +170,7 @@ START
 - **🛡️ Multiple Retry Strategies** - Exponential backoff, linear, fixed delay, and adaptive retries
 - **📁 State Machine** - Robust state tracking with rollback capabilities
 - **💾 Configuration Backup** - Automatic backup and restore of router configurations
+- **🧪 UART Pin Discovery** - Receive-only Pin 1/Pin 2 discovery before any reset workflow
 - **✅ Cisco 4321 ISR Preflight** - Confirms expected console settings, serial ports, and Linux permissions
 - **🔎 Router Identity Check** - Best-effort model, serial, and IOS XE verification after manual connection
 - **🧭 Recovery Resume Warning** - Flags interrupted recoveries, especially after `confreg 0x2142`
@@ -242,7 +243,13 @@ CISCORESET/
    python src/bootstrap.py
    ```
 
-2. **Select Option 1: Guided Cisco 4321 ISR Reset**
+2. **Select Option 1: UART Pin Discovery** before reset work if you are identifying pins.
+   - Connect only adapter GND and RX
+   - Leave adapter TX, VCC, CTS, and DTR disconnected
+   - Leave Cisco Pin 3 and Pin 4 empty
+   - Power cycle the router and confirm boot text is captured
+
+3. **Select Option 2: Guided Cisco 4321 ISR Reset**
    - Follow on-screen instructions
    - Perform physical actions when prompted:
      - Turn OFF router
@@ -252,16 +259,16 @@ CISCORESET/
 
 ### Manual Workflow
 
-1. **Connect to Cisco 4321 ISR** (Option 2)
+1. **Connect to Cisco 4321 ISR** (Option 3)
    - Select TTY port from list
    - Connection is established automatically
 
-2. **Run Password Reset** (Option 3)
+2. **Run Password Reset** (Option 4)
    - Confirm workflow start
    - Monitor progress through 7 steps
    - Enter new password when prompted
 
-3. **View Results** (Option 4)
+3. **View Results** (Option 5)
    - System detection results
    - Export to JSON/YAML/TXT
 
@@ -269,20 +276,21 @@ CISCORESET/
 
 | Option | Function | Description |
 |--------|----------|-------------|
-| 1 | Guided Cisco 4321 ISR Reset | Step-by-step instructions with physical prompts and 4321 ISR preflight |
-| 2 | Connect to Cisco 4321 ISR | Manual connection with Cisco console settings check |
-| 3 | Password Reset Workflow | Automated password reset process |
-| 4 | System Detection | Detect licenses, hardware, software |
-| 5 | Interactive Command Mode | Execute Cisco IOS commands directly |
-| 6 | View Logs | Browse and view log files |
-| 7 | Settings | Configure application settings |
-| 8 | Exit | Exit application |
-| 9 | View Metrics | View real-time metrics and statistics |
-| 10 | Configuration Backup/Restore | Backup and restore router configs |
-| 11 | Individual Detection Options | Run specific detection functions |
-| 12 | Advanced Password Reset | Reset individual password types |
-| 13 | UART Firmware Dump | Capture a raw firmware/image stream from UART to a file |
-| 14 | Decompress Firmware Dump | Decompress or extract a captured UART dump |
+| 1 | UART Pin Discovery | Receive-only GND/RX boot-output discovery before reset workflows |
+| 2 | Guided Cisco 4321 ISR Reset | Step-by-step instructions with physical prompts and 4321 ISR preflight |
+| 3 | Connect to Cisco 4321 ISR | Manual connection with Cisco console settings check |
+| 4 | Password Reset Workflow | Automated password reset process |
+| 5 | System Detection | Detect licenses, hardware, software |
+| 6 | Interactive Command Mode | Execute Cisco IOS commands directly |
+| 7 | View Logs | Browse and view log files |
+| 8 | Settings | Configure application settings |
+| 9 | Exit | Exit application |
+| 10 | View Metrics | View real-time metrics and statistics |
+| 11 | Configuration Backup/Restore | Backup and restore router configs |
+| 12 | Individual Detection Options | Run specific detection functions |
+| 13 | Advanced Password Reset | Reset individual password types |
+| 14 | UART Firmware Dump | Capture a raw firmware/image stream from UART to a file |
+| 15 | Decompress Firmware Dump | Decompress or extract a captured UART dump |
 
 ## 🔧 Prerequisites
 
@@ -302,7 +310,7 @@ CISCORESET/
 
 ```bash
 # Navigate to tool directory
-cd tools/CISCORESET
+cd REVCISCO
 
 # Run bootstrap script
 ./bootstrap.sh
@@ -324,13 +332,14 @@ See [docs/INSTALL.md](docs/INSTALL.md) for detailed manual installation instruct
 
 ```
 1. Run: python src/bootstrap.py
-2. Select: Option 1 (Guided Workflow)
-3. Follow prompts:
+2. If pinout is unknown, select: Option 1 (UART Pin Discovery)
+3. Select: Option 2 (Guided Workflow)
+4. Follow prompts:
    - Verify connections
    - Turn OFF router
    - Wait 10 seconds
    - Turn ON router
-4. Tool automatically:
+5. Tool automatically:
    - Connects to router
    - Sends break sequence
    - Enters ROM monitor
@@ -338,11 +347,67 @@ See [docs/INSTALL.md](docs/INSTALL.md) for detailed manual installation instruct
    - Saves configuration
 ```
 
+### UART Pin Discovery First Test
+
+Use this mode before any reset or transmit workflow when you are identifying the Cisco `UART_DEBUG` header.
+
+Only these two electrical connections should exist:
+
+```text
+Adapter GND  -> Cisco Pin 1
+Adapter RX   -> Cisco Pin 2
+```
+
+Everything else must be disconnected:
+
+```text
+Adapter TX   -> disconnected
+Adapter VCC  -> disconnected
+Adapter CTS  -> disconnected
+Adapter DTR  -> disconnected
+Cisco Pin 3  -> no wire
+Cisco Pin 4  -> no wire
+```
+
+For the current color set:
+
+```text
+Brown/tan wire on adapter GND -> Cisco Pin 1
+Wire on adapter RX            -> Cisco Pin 2
+```
+
+If the yellow wire is the one plugged into adapter RX, use:
+
+```text
+Brown/tan -> Cisco Pin 1
+Yellow    -> Cisco Pin 2
+```
+
+Remove or leave completely floating/disconnected:
+
+```text
+Red
+Orange
+Any wire on Cisco Pin 3
+Any wire on Cisco Pin 4
+```
+
+The first test passes only when the Cisco header has exactly:
+
+```text
+Pin 1 = brown/tan GND
+Pin 2 = adapter RX wire
+Pin 3 = empty
+Pin 4 = empty
+```
+
+Option 1 listens receive-only and saves boot output under `logs/uart_pin_discovery_*.log`.
+
 ### Quick System Inventory
 
 ```
-1. Connect to router (Option 2)
-2. Select: Option 4 (System Detection)
+1. Connect to router (Option 3)
+2. Select: Option 5 (System Detection)
 3. View results
 4. Export if needed (JSON/YAML/TXT)
 ```
@@ -350,8 +415,8 @@ See [docs/INSTALL.md](docs/INSTALL.md) for detailed manual installation instruct
 ### Configuration Backup
 
 ```
-1. Connect to router (Option 2)
-2. Select: Option 10 (Configuration Backup/Restore)
+1. Connect to router (Option 3)
+2. Select: Option 11 (Configuration Backup/Restore)
 3. Choose: Backup Running Configuration
 4. File saved to backups/ directory
 ```
@@ -359,11 +424,11 @@ See [docs/INSTALL.md](docs/INSTALL.md) for detailed manual installation instruct
 ### UART Firmware Capture And Analysis
 
 ```
-1. Connect to router or UART source (Option 2)
+1. Connect to router or UART source (Option 3)
 2. Start the router/bootloader firmware stream
-3. Select: Option 13 (UART Firmware Dump)
+3. Select: Option 14 (UART Firmware Dump)
 4. Save the raw capture under firmware_dumps/
-5. Select: Option 14 (Decompress Firmware Dump)
+5. Select: Option 15 (Decompress Firmware Dump)
 6. Use auto for common compression or binwalk for firmware carving
 ```
 

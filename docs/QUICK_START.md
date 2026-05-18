@@ -4,7 +4,7 @@
 
 1. Install dependencies:
 ```bash
-cd tools/CISCORESET
+cd REVCISCO
 pip install -r requirements.txt
 ```
 
@@ -19,32 +19,56 @@ sudo usermod -a -G dialout $USER
 ### Start the Tool
 
 ```bash
-python bootstrap.py
+python src/bootstrap.py
 ```
 
 Or make it executable:
 ```bash
-chmod +x bootstrap.py
-./bootstrap.py
+chmod +x src/bootstrap.py
+./src/bootstrap.py
 ```
 
 ### Basic Workflow
 
-1. **Guided Reset**: Select option 1 for the full Cisco 4321 ISR guided workflow
-2. **Connect to Router**: Select option 2, confirm the 4321 ISR console settings, then choose your TTY port
-3. **Password Reset**: Select option 3 if you are already connected
-4. **System Detection**: Select option 4 to view licenses, hardware, software info
-5. **Interactive Mode**: Select option 5 to execute Cisco IOS commands directly
-6. **UART Firmware Dump**: Select option 13 to capture a raw UART byte stream to `firmware_dumps/`
-7. **Decompress Dump**: Select option 14 to decompress or extract an existing dump. Choose `binwalk` format for broader firmware carving when binwalk is installed.
+1. **UART Pin Discovery**: Select option 1 for receive-only Pin 1/Pin 2 boot-output discovery.
+2. **Guided Reset**: Select option 2 for the full Cisco 4321 ISR guided workflow.
+3. **Connect to Router**: Select option 3, confirm the 4321 ISR console settings, then choose your TTY port.
+4. **Password Reset**: Select option 4 if you are already connected.
+5. **System Detection**: Select option 5 to view licenses, hardware, software info.
+6. **Interactive Mode**: Select option 6 to execute Cisco IOS commands directly.
+7. **UART Firmware Dump**: Select option 14 to capture a raw UART byte stream to `firmware_dumps/`.
+8. **Decompress Dump**: Select option 15 to decompress or extract an existing dump. Choose `binwalk` format for broader firmware carving when binwalk is installed.
 
 The tool now shows a Cisco 4321 ISR preflight before connecting, checks router identity after manual connection when possible, and warns on startup if a previous recovery stopped before cleanup.
+
+### UART Pin Discovery Wiring
+
+Use option 1 before reset work when you are identifying the Cisco `UART_DEBUG` header.
+
+Correct first-test wiring:
+
+```text
+Adapter GND  -> Cisco Pin 1
+Adapter RX   -> Cisco Pin 2
+```
+
+Everything else stays disconnected:
+
+```text
+Adapter TX/VCC/CTS/DTR -> disconnected
+Cisco Pin 3            -> empty
+Cisco Pin 4            -> empty
+```
+
+With the current wire colors, use brown/tan from adapter GND on Cisco Pin 1. Use the adapter RX wire on Cisco Pin 2. If yellow is plugged into adapter RX, yellow goes to Cisco Pin 2. Remove red, orange, and any wire on Cisco Pin 3 or Pin 4.
+
+The pass condition is exactly: Pin 1 = brown/tan GND, Pin 2 = adapter RX wire, Pin 3 = empty, Pin 4 = empty.
 
 ## Testing
 
 Run the test script to verify components:
 ```bash
-python test_tool.py
+python scripts/test_tool.py
 ```
 
 ## Troubleshooting

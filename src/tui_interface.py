@@ -151,20 +151,21 @@ This tool will help you reset the password on your Cisco 4321 ISR router.
             menu_table.add_column(style="white")
             
             menu_items = [
-                ("1", "Guided Cisco 4321 ISR Reset"),
-                ("2", "Connect to Cisco 4321 ISR"),
-                ("3", "Password Reset Workflow"),
-                ("4", "System Detection/Inventory"),
-                ("5", "Interactive Command Mode"),
-                ("6", "View Logs"),
-                ("7", "Settings"),
-                ("8", "Exit"),
-                ("9", "View Metrics"),
-                ("10", "Configuration Backup/Restore"),
-                ("11", "Individual Detection Options"),
-                ("12", "Advanced Password Reset"),
-                ("13", "UART Firmware Dump"),
-                ("14", "Decompress Firmware Dump")
+                ("1", "UART Pin Discovery"),
+                ("2", "Guided Cisco 4321 ISR Reset"),
+                ("3", "Connect to Cisco 4321 ISR"),
+                ("4", "Password Reset Workflow"),
+                ("5", "System Detection/Inventory"),
+                ("6", "Interactive Command Mode"),
+                ("7", "View Logs"),
+                ("8", "Settings"),
+                ("9", "Exit"),
+                ("10", "View Metrics"),
+                ("11", "Configuration Backup/Restore"),
+                ("12", "Individual Detection Options"),
+                ("13", "Advanced Password Reset"),
+                ("14", "UART Firmware Dump"),
+                ("15", "Decompress Firmware Dump")
             ]
             
             for num, desc in menu_items:
@@ -181,29 +182,135 @@ This tool will help you reset the password on your Cisco 4321 ISR router.
             
             choice = Prompt.ask(
                 "[bold cyan]Select option[/bold cyan]",
-                choices=["1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14"],
+                choices=["1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15"],
                 default="1"
             )
         else:
             print(f"\nConnection Status: {connection_status}")
             print("\nMain Menu:")
-            print("1. Guided Cisco 4321 ISR Reset")
-            print("2. Connect to Cisco 4321 ISR")
-            print("3. Password Reset Workflow")
-            print("4. System Detection/Inventory")
-            print("5. Interactive Command Mode")
-            print("6. View Logs")
-            print("7. Settings")
-            print("8. Exit")
-            print("9. View Metrics")
-            print("10. Configuration Backup/Restore")
-            print("11. Individual Detection Options")
-            print("12. Advanced Password Reset")
-            print("13. UART Firmware Dump")
-            print("14. Decompress Firmware Dump")
-            choice = input("\nSelect option [1-14]: ").strip() or "1"
+            print("1. UART Pin Discovery")
+            print("2. Guided Cisco 4321 ISR Reset")
+            print("3. Connect to Cisco 4321 ISR")
+            print("4. Password Reset Workflow")
+            print("5. System Detection/Inventory")
+            print("6. Interactive Command Mode")
+            print("7. View Logs")
+            print("8. Settings")
+            print("9. Exit")
+            print("10. View Metrics")
+            print("11. Configuration Backup/Restore")
+            print("12. Individual Detection Options")
+            print("13. Advanced Password Reset")
+            print("14. UART Firmware Dump")
+            print("15. Decompress Firmware Dump")
+            choice = input("\nSelect option [1-15]: ").strip() or "1"
         
         return choice
+
+    def show_uart_pin_discovery_intro(self, ports: list, baudrate: int = 9600,
+                                      in_dialout_group: bool = False) -> bool:
+        """Show receive-only UART pin discovery safety checklist."""
+        port_text = "\n".join(f"  - {port}" for port in ports) if ports else "  - No serial ports detected"
+        permission = "OK" if in_dialout_group else "Needs attention"
+        content = (
+            "Use this before any reset workflow to identify Cisco UART_DEBUG pins safely.\n\n"
+            "Correct first-test wiring:\n"
+            "  Adapter GND  -> Cisco Pin 1\n"
+            "  Adapter RX   -> Cisco Pin 2\n\n"
+            "Everything else must be disconnected/floating:\n"
+            "  Adapter TX, VCC, CTS, DTR\n"
+            "  Cisco Pin 3 and Cisco Pin 4\n\n"
+            "Colour mapping for the current harness:\n"
+            "  Brown/tan -> Cisco Pin 1 (GND)\n"
+            "  RX wire   -> Cisco Pin 2\n\n"
+            "Pass condition:\n"
+            "  Cisco header has exactly Pin 1 = GND, Pin 2 = RX, Pin 3 empty, Pin 4 empty.\n\n"
+            f"Listen baud rate: {baudrate}\n"
+            f"Serial permission: {permission}\n"
+            f"Detected ports:\n{port_text}"
+        )
+
+        if self.console:
+            self.console.clear()
+            self.show_info_panel("UART Pin Discovery", content)
+            self.console.print()
+            if not ports:
+                self.show_error_dialog(
+                    "No Serial Port Detected",
+                    "Connect the USB UART adapter and check /dev/ttyUSB*, /dev/ttyACM*, or /dev/ttyS*.",
+                    ["Do not connect adapter TX or VCC", "Confirm dialout group access"]
+                )
+                return False
+            return self.confirm("Confirm only GND and RX are connected for receive-only discovery?", default=False)
+
+        print("\nUART Pin Discovery")
+        print("-" * 80)
+        print(content)
+        if not ports:
+            return False
+        return self.confirm("Confirm only GND and RX are connected for receive-only discovery?", default=False)
+
+    def show_uart_discovery_settings(self, default_log_file: str) -> Optional[Dict[str, Any]]:
+        """Collect UART discovery listener settings."""
+        if self.console:
+            duration = IntPrompt.ask("Listen duration in seconds", default=60)
+            output_file = Prompt.ask("Save boot log to", default=default_log_file)
+        else:
+            duration = int(input("Listen duration in seconds [60]: ").strip() or "60")
+            output_file = input(f"Save boot log to [{default_log_file}]: ").strip() or default_log_file
+
+        return {
+            "duration": float(duration),
+            "output_file": output_file
+        }
+
+    def show_uart_discovery_result(self, result: Dict[str, Any]) -> None:
+        """Show UART discovery listener result."""
+        sample = result.get("sample", "")
+        if len(sample) > 1200:
+            sample = sample[-1200:]
+        detected = result.get("detected_boot_text", False)
+        content = (
+            f"Captured: {result.get('bytes_captured', 0):,} bytes\n"
+            f"Saved: {result.get('output_file', 'unknown')}\n"
+            f"Likely Cisco boot text: {'yes' if detected else 'no'}\n\n"
+            "Recent output:\n"
+            f"{sample or '<no readable output captured>'}"
+        )
+
+        suggestions = []
+        if detected:
+            suggestions = [
+                "Pin 1/Pin 2 receive-only mapping is likely correct",
+                "Keep VCC disconnected",
+                "Only add adapter TX later if you need interactive input"
+            ]
+        else:
+            suggestions = [
+                "Power cycle the router while listening",
+                "Move adapter RX to the next candidate Cisco pin",
+                "Keep adapter TX and VCC disconnected",
+                "Confirm common ground on Pin 1"
+            ]
+
+        if self.console:
+            self.console.print(Panel(
+                content,
+                title="[bold cyan]UART Discovery Result[/bold cyan]",
+                border_style="green" if detected else "yellow",
+                padding=(1, 2)
+            ))
+            if suggestions:
+                self.show_info_panel("Next Steps", "\n".join(f"- {s}" for s in suggestions))
+            Prompt.ask("[bold cyan]Press Enter to continue[/bold cyan]", default="")
+        else:
+            print("\nUART Discovery Result")
+            print("-" * 80)
+            print(content)
+            print("\nNext Steps:")
+            for suggestion in suggestions:
+                print(f"- {suggestion}")
+            input("\nPress Enter to continue...")
 
     def show_cisco_4321_preflight(self, ports: list, baudrate: int = 9600,
                                   in_dialout_group: bool = False) -> bool:

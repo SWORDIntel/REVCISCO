@@ -2,46 +2,50 @@
 
 ## ✅ All Functions Verified and Accessible
 
-### Main Menu (14 Options)
+### Main Menu (15 Options)
 
-1. **Guided Cisco 4321 ISR Reset** ✅
+1. **UART Pin Discovery** ✅
+   - Receive-only wiring checklist for Pin 1 GND and Pin 2 RX
+   - Captures boot output without connecting adapter TX or VCC
+
+2. **Guided Cisco 4321 ISR Reset** ✅
    - Full guided password reset workflow
    - Cisco 4321 ISR console preflight
    - Physical power-cycle prompts
 
-2. **Connect to Cisco 4321 ISR** ✅
+3. **Connect to Cisco 4321 ISR** ✅
    - `connect()` - Fully functional
    - Cisco 4321 ISR console preflight
    - Port selection with auto-detection
    - Connection persistence
    - Last port memory
 
-3. **Password Reset Workflow** ✅
+4. **Password Reset Workflow** ✅
    - `run_password_reset_workflow()` - Fully functional
    - All 7 workflow steps visible
    - Progress indicators
    - Error handling
 
-4. **System Detection/Inventory** ✅
+5. **System Detection/Inventory** ✅
    - `run_system_detection_only()` - Fully functional
    - `detect_all()` - Called internally
    - `export_results()` - Accessible via export prompt
    - Results display with export options
 
-5. **Interactive Command Mode** ✅
+6. **Interactive Command Mode** ✅
    - `InteractiveConfig.start()` - Fully functional
    - Command execution
    - History command
    - Help command
    - Auto-reconnect on disconnect
 
-6. **View Logs** ✅
+7. **View Logs** ✅
    - `show_log_viewer()` - Fully functional
    - Log file selection
    - Log viewing (last 100 lines)
    - File size display
 
-7. **Settings** ✅
+8. **Settings** ✅
    - `show_settings_menu()` - Fully functional
    - View all settings
    - Edit individual settings
@@ -49,17 +53,17 @@
    - Export settings
    - Settings persistence
 
-8. **Exit** ✅
+9. **Exit** ✅
    - Clean exit with connection cleanup
 
-9. **View Metrics** ✅
+10. **View Metrics** ✅
    - `show_metrics()` - Fully functional
    - Connection metrics
    - Data transfer statistics
    - Error counts
    - Command execution stats
 
-10. **Configuration Backup/Restore** ✅
+11. **Configuration Backup/Restore** ✅
    - `show_backup_menu()` - Fully functional
    - Backup running configuration
    - Backup startup configuration
@@ -67,37 +71,38 @@
    - Restore configuration from backup
    - All ConfigBackup functions now accessible
 
-11. **Individual Detection Options** ✅
+12. **Individual Detection Options** ✅
    - Individual SystemDetector functions are directly selectable
 
-12. **Advanced Password Reset** ✅
+13. **Advanced Password Reset** ✅
    - Enable secret, console, and VTY reset actions are directly selectable
 
-13. **UART Firmware Dump** ✅
+14. **UART Firmware Dump** ✅
    - Raw UART byte streams can be captured to `firmware_dumps/*.bin`
 
-14. **Decompress Firmware Dump** ✅
+15. **Decompress Firmware Dump** ✅
    - Captured gzip, bzip2, xz, zip, tar, and zlib dump files can be decompressed or extracted
    - Optional binwalk extraction is available when a working binwalk CLI is installed
 
 ## Function Coverage
 
 ### Directly Accessible via TUI
-- ✅ `connect()` - Options 1 and 2
-- ✅ `run_password_reset_workflow()` - Options 1 and 3
-- ✅ `run_system_detection_only()` - Option 4
-- ✅ `InteractiveConfig.start()` - Option 5
-- ✅ `show_log_viewer()` - Option 6
-- ✅ `show_settings_menu()` - Option 7
-- ✅ `show_metrics()` - Option 9
-- ✅ `show_backup_menu()` - Option 10
-- ✅ `backup_running_config()` - Via Option 10
-- ✅ `backup_startup_config()` - Via Option 10
-- ✅ `restore_config()` - Via Option 10
-- ✅ Individual detection functions - Via Option 11
-- ✅ Advanced password reset functions - Via Option 12
-- ✅ Raw UART firmware dump - Via Option 13
-- ✅ Firmware dump decompression - Via Option 14
+- ✅ UART pin discovery - Option 1
+- ✅ `connect()` - Options 2 and 3
+- ✅ `run_password_reset_workflow()` - Options 2 and 4
+- ✅ `run_system_detection_only()` - Option 5
+- ✅ `InteractiveConfig.start()` - Option 6
+- ✅ `show_log_viewer()` - Option 7
+- ✅ `show_settings_menu()` - Option 8
+- ✅ `show_metrics()` - Option 10
+- ✅ `show_backup_menu()` - Option 11
+- ✅ `backup_running_config()` - Via Option 11
+- ✅ `backup_startup_config()` - Via Option 11
+- ✅ `restore_config()` - Via Option 11
+- ✅ Individual detection functions - Via Option 12
+- ✅ Advanced password reset functions - Via Option 13
+- ✅ Raw UART firmware dump - Via Option 14
+- ✅ Firmware dump decompression - Via Option 15
 
 ### Indirectly Accessible (via workflows)
 - ✅ All `SystemDetector` functions via `detect_all()`
@@ -122,7 +127,7 @@
 
 **Status**: ✅ **ALL FUNCTIONS ARE ACCESSIBLE VIA TUI**
 
-- **Total Menu Options**: 14
+- **Total Menu Options**: 15
 - **Directly Accessible Functions**: 12+
 - **Indirectly Accessible Functions**: 30+
 - **Coverage**: 100% of core functionality

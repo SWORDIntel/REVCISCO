@@ -169,6 +169,25 @@ class CiscoReset:
 
         return self.tui.show_port_selection(ports)
 
+    def _select_port_for_pin_discovery(self) -> Optional[str]:
+        """Run receive-only UART pin discovery safety checks and select a port."""
+        if not self.serial_conn:
+            self.serial_conn = SerialConnection(
+                logger=self.log_monitor.logger,
+                metrics=self.log_monitor.metrics
+            )
+
+        ports = self.serial_conn.detect_ports()
+        baudrate = self._default_baudrate()
+        if not self.tui.show_uart_pin_discovery_intro(
+            ports,
+            baudrate=baudrate,
+            in_dialout_group=self._user_in_dialout_group()
+        ):
+            return None
+
+        return self.tui.show_port_selection(ports)
+
     def _check_cisco_4321_identity(self) -> None:
         """Best-effort model check after connection."""
         if not self.command_executor:
@@ -485,7 +504,7 @@ class CiscoReset:
             self.tui.show_error_dialog(
                 "Not Connected",
                 "Please connect to the Cisco 4321 ISR first",
-                ["Select option 2 to connect", "Start the firmware stream before capture"]
+                ["Select option 3 to connect", "Start the firmware stream before capture"]
             )
             return False
 
@@ -514,6 +533,64 @@ class CiscoReset:
                 ["Verify the serial connection is open", "Check disk space", "Retry with a longer idle timeout"]
             )
             return False
+
+    def run_uart_pin_discovery(self) -> bool:
+        """Receive-only listener to help identify UART_DEBUG GND/RX pins."""
+        port = self._select_port_for_pin_discovery()
+        if not port:
+            return False
+
+        log_dir = self.project_root / "logs"
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        default_log = str(log_dir / f"uart_pin_discovery_{timestamp}.log")
+        settings = self.tui.show_uart_discovery_settings(default_log)
+        if not settings:
+            return False
+
+        discovery_conn = SerialConnection(
+            port=port,
+            baudrate=self._default_baudrate(),
+            logger=self.log_monitor.logger,
+            metrics=self.log_monitor.metrics
+        )
+        if not discovery_conn.open(port, self._default_baudrate()):
+            self.tui.show_error_dialog(
+                "Discovery Connection Failed",
+                f"Could not open {port}",
+                ["Check USB UART permissions", "Close other serial tools", "Try a different adapter port"]
+            )
+            return False
+
+        try:
+            self.tui.show_status(
+                "Listening receive-only. Power cycle the Cisco 4321 ISR now and watch for boot text.",
+                "warning"
+            )
+            output = discovery_conn.read_output(settings["duration"])
+            output_path = Path(settings["output_file"]).expanduser()
+            output_path.parent.mkdir(parents=True, exist_ok=True)
+            with open(output_path, "w", encoding="utf-8", errors="replace") as f:
+                f.write(output)
+
+            boot_patterns = [
+                "System Bootstrap",
+                "Cisco IOS",
+                "Cisco IOS XE",
+                "ROMMON",
+                "Initializing",
+                "Readonly ROMMON"
+            ]
+            detected = any(pattern.lower() in output.lower() for pattern in boot_patterns)
+            result = {
+                "bytes_captured": len(output.encode("utf-8", errors="replace")),
+                "output_file": str(output_path),
+                "detected_boot_text": detected,
+                "sample": output
+            }
+            self.tui.show_uart_discovery_result(result)
+            return detected
+        finally:
+            discovery_conn.close()
 
     def _detect_compression_format(self, input_path: Path) -> str:
         """Detect common compression/archive formats by magic bytes."""
@@ -669,6 +746,9 @@ class CiscoReset:
             choice = self.tui.show_main_menu(connection_status=status)
             
             if choice == "1":
+                # Receive-only UART pin discovery
+                self.run_uart_pin_discovery()
+            elif choice == "2":
                 # Guided workflow
                 if self.tui.show_guided_workflow():
                     # Now connect and run workflow
@@ -690,7 +770,7 @@ class CiscoReset:
                                         "Try a different port"
                                     ]
                                 )
-            elif choice == "2":
+            elif choice == "3":
                 # Connect to router
                 port = self._select_port_for_4321()
                 if port:
@@ -708,13 +788,13 @@ class CiscoReset:
                                     "Try a different port"
                                 ]
                             )
-            elif choice == "3":
+            elif choice == "4":
                 # Password reset workflow
                 if not self.serial_conn or not self.serial_conn.is_open():
                     self.tui.show_error_dialog(
                         "Not Connected",
                         "Please connect to router first",
-                        ["Select option 2 to connect"]
+                        ["Select option 3 to connect"]
                     )
                     time.sleep(2)
                     continue
@@ -736,13 +816,13 @@ class CiscoReset:
                 
                 if self.tui.confirm("Continue?", default=True):
                     self.run_password_reset_workflow()
-            elif choice == "4":
+            elif choice == "5":
                 # System detection
                 if not self.serial_conn or not self.serial_conn.is_open():
                     self.tui.show_error_dialog(
                         "Not Connected",
                         "Please connect to router first",
-                        ["Select option 2 to connect"]
+                        ["Select option 3 to connect"]
                     )
                     time.sleep(2)
                     continue
@@ -753,13 +833,13 @@ class CiscoReset:
                         if export_format:
                             export_file = self.system_detector.export_results(export_format)
                             self.tui.show_success_message(f"Results exported to {export_file}")
-            elif choice == "5":
+            elif choice == "6":
                 # Interactive command mode
                 if not self.command_executor:
                     self.tui.show_error_dialog(
                         "Not Connected",
                         "Please connect to router first",
-                        ["Select option 2 to connect"]
+                        ["Select option 3 to connect"]
                     )
                     time.sleep(2)
                     continue
@@ -783,12 +863,12 @@ class CiscoReset:
                         else:
                             self.tui.show_error_dialog("Reconnection Failed", "Could not reconnect to router", 
                                                       ["Check cable connection", "Verify port is available"])
-            elif choice == "6":
+            elif choice == "7":
                 # View logs
                 project_root = Path(__file__).parent.parent
                 log_dir = str(project_root / "logs")
                 self.tui.show_log_viewer(log_dir)
-            elif choice == "7":
+            elif choice == "8":
                 # Settings
                 current_settings = self.settings_manager.get_all()
                 updated = self.tui.show_settings_menu(current_settings)
@@ -808,17 +888,17 @@ class CiscoReset:
                         # Apply settings that affect runtime
                         if "log_level" in updated:
                             self.log_monitor.logger.setLevel(getattr(logging, updated["log_level"].upper(), logging.INFO))
-            elif choice == "9":
+            elif choice == "10":
                 # Show metrics
                 metrics = self.log_monitor.get_current_metrics()
                 self.tui.show_metrics(metrics)
-            elif choice == "10":
+            elif choice == "11":
                 # Configuration backup/restore
                 if not self.command_executor:
                     self.tui.show_error_dialog(
                         "Not Connected",
                         "Please connect to router first",
-                        ["Select option 2 to connect"]
+                        ["Select option 3 to connect"]
                     )
                     time.sleep(2)
                     continue
@@ -826,25 +906,25 @@ class CiscoReset:
                 project_root = Path(__file__).parent.parent
                 backup_dir = str(project_root / "backups")
                 self.tui.show_backup_menu(backup_dir, self.command_executor)
-            elif choice == "11":
+            elif choice == "12":
                 # Individual detection options
                 if not self.command_executor or not self.system_detector:
                     self.tui.show_error_dialog(
                         "Not Connected",
                         "Please connect to router first",
-                        ["Select option 2 to connect"]
+                        ["Select option 3 to connect"]
                     )
                     time.sleep(2)
                     continue
                 
                 self.tui.show_individual_detection_menu(self.system_detector)
-            elif choice == "12":
+            elif choice == "13":
                 # Advanced password reset options
                 if not self.command_executor or not self.password_reset:
                     self.tui.show_error_dialog(
                         "Not Connected",
                         "Please connect to router first",
-                        ["Select option 2 to connect"]
+                        ["Select option 3 to connect"]
                     )
                     time.sleep(2)
                     continue
@@ -854,19 +934,19 @@ class CiscoReset:
                     self.tui.show_error_dialog(
                         "Privileged Access Required",
                         "Router must be in privileged mode (no password) to use advanced password reset options",
-                        ["Run password reset workflow first (option 3)", "Or ensure router is in privileged mode"]
+                        ["Run password reset workflow first (option 4)", "Or ensure router is in privileged mode"]
                     )
                     time.sleep(2)
                     continue
                 
                 self.tui.show_advanced_password_reset_menu(self.password_reset)
-            elif choice == "13":
+            elif choice == "14":
                 # Raw UART firmware/image dump
                 self.run_uart_firmware_dump()
-            elif choice == "14":
+            elif choice == "15":
                 # Decompress an existing dump
                 self.run_firmware_decompression()
-            elif choice == "8":
+            elif choice == "9":
                 # Exit
                 break
         
