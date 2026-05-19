@@ -215,6 +215,7 @@ This tool will help you reset the password on your Cisco 4321 ISR router.
         content = (
             "Use this before any reset workflow to identify Cisco UART_DEBUG pins safely.\n\n"
             "Supported cable styles:\n"
+            "  - FT232RL 6-pin header: DTR, RXI, TXO, VCC, CTS, GND\n"
             "  - 6-pin USB-TTL board: GND, RXD/RX, TXD/TX, VCC, CTS, DTR\n"
             "  - 4/5-pin USB-TTL lead: GND, RX, TX, VCC, optional 3V3/5V\n"
             "  - 3-wire UART lead: GND, RX, TX\n"
@@ -223,7 +224,11 @@ This tool will help you reset the password on your Cisco 4321 ISR router.
             "  - DB9/RS-232 adapter: do not connect directly to TTL UART_DEBUG pins\n\n"
             "Receive-only discovery rule:\n"
             "  Adapter GND -> one Cisco ground candidate\n"
-            "  Adapter RX  -> one Cisco transmit/TX-output candidate\n\n"
+            "  FT232RL RXI -> one Cisco transmit/TX-output candidate\n\n"
+            "FT232RL signal meaning:\n"
+            "  RXI listens to the router. Connect RXI to a suspected Cisco TX/output pin.\n"
+            "  TXO talks to the router. Connect TXO only after RXI has confirmed readable output.\n"
+            "  VCC must stay disconnected from the Cisco UART_DEBUG header.\n\n"
             "Everything else must be disconnected/floating:\n"
             "  Adapter TX, VCC/3V3/5V, CTS, DTR, RTS\n"
             "  Every Cisco pin not in the current two-wire test\n\n"
@@ -235,14 +240,14 @@ This tool will help you reset the password on your Cisco 4321 ISR router.
             "General candidate workflow:\n"
             "  1. Identify or choose one likely Cisco GND pin.\n"
             "  2. Keep adapter GND on that ground candidate.\n"
-            "  3. Move adapter RX across one Cisco pin at a time.\n"
+            "  3. Move FT232RL RXI across one Cisco pin at a time.\n"
             "  4. Power cycle and listen after each candidate pair.\n"
             "  5. A pass is readable boot text, such as System Bootstrap, Cisco IOS, ROMMON, or IOS XE.\n\n"
             "If you are testing the earlier suspected mapping:\n"
             "  Brown/tan adapter GND -> Cisco Pin 1\n"
             "  Adapter RX wire       -> Cisco Pin 2\n"
             "  Cisco Pin 3/Pin 4     -> empty\n\n"
-            "Do not connect adapter VCC to the Cisco header. Only add adapter TX after RX output is confirmed.\n\n"
+            "Do not connect adapter VCC to the Cisco header. Only add FT232RL TXO after RXI output is confirmed.\n\n"
             f"Listen baud rate: {baudrate}\n"
             f"Serial permission: {permission}\n"
             f"Detected ports:\n{port_text}"
@@ -259,45 +264,66 @@ This tool will help you reset the password on your Cisco 4321 ISR router.
                     ["Do not connect adapter TX or power pins", "Confirm dialout group access"]
                 )
                 return False
-            return self.confirm("Confirm this is a two-wire receive-only test: adapter GND plus adapter RX only?", default=False)
+            return self.confirm("Confirm this is a two-wire receive-only test: adapter GND plus FT232RL RXI only?", default=False)
 
         print("\nUART Pin Discovery")
         print("-" * 80)
         print(content)
         if not ports:
             return False
-        return self.confirm("Confirm this is a two-wire receive-only test: adapter GND plus adapter RX only?", default=False)
+        return self.confirm("Confirm this is a two-wire receive-only test: adapter GND plus FT232RL RXI only?", default=False)
 
     def show_uart_discovery_settings(self, default_log_file: str) -> Optional[Dict[str, Any]]:
         """Collect UART discovery listener settings."""
         cable_types = {
             "1": {
-                "label": "6-pin USB-TTL board (GND/RX/TX/VCC/CTS/DTR)",
-                "note": "Use only GND and RX. Leave VCC, TX, CTS, and DTR disconnected."
+                "label": "FT232RL 6-pin header (DTR/RXI/TXO/VCC/CTS/GND)",
+                "note": "Use GND+RXI to find Cisco TX/output. Use TXO only later to test Cisco RX/input. Leave DTR, VCC, and CTS disconnected."
             },
             "2": {
+                "label": "Generic 6-pin USB-TTL board (GND/RX/TX/VCC/CTS/DTR)",
+                "note": "Use only GND and RX. Leave VCC, TX, CTS, and DTR disconnected."
+            },
+            "3": {
                 "label": "4/5-pin USB-TTL lead (GND/RX/TX/VCC[/3V3/5V])",
                 "note": "Use only GND and RX. Leave TX and all power pins disconnected."
             },
-            "3": {
+            "4": {
                 "label": "3-wire UART lead (GND/RX/TX)",
                 "note": "Use only GND and RX for discovery. Leave TX disconnected until output is confirmed."
             },
-            "4": {
+            "5": {
                 "label": "Keyed JST/Dupont harness",
                 "note": "Verify printed labels or continuity. Wire color alone is not enough."
             },
-            "5": {
+            "6": {
                 "label": "RJ45/rollover Cisco console cable",
                 "note": "Use this with the normal Cisco console port. Do not use RJ45 rollover wiring for board-level UART_DEBUG pin probing."
             },
-            "6": {
+            "7": {
                 "label": "DB9/RS-232 adapter",
                 "note": "DB9/RS-232 voltage levels are not TTL-safe. Use a TTL-level USB adapter for UART_DEBUG headers."
             },
-            "7": {
+            "8": {
                 "label": "Other/unknown cable",
                 "note": "Treat all non-GND/RX conductors as unsafe until identified."
+            }
+        }
+        ft232_signals = {
+            "1": {
+                "signal": "RXI",
+                "role": "Find Cisco TX/output",
+                "note": "Recommended first. GND+RXI can passively capture boot text."
+            },
+            "2": {
+                "signal": "TXO",
+                "role": "Record/test suspected Cisco RX/input",
+                "note": "GND+TXO alone cannot passively prove anything. Use only after a receive path is known."
+            },
+            "3": {
+                "signal": "RXI+TXO",
+                "role": "Known RXI path plus TXO introduction",
+                "note": "Use after RXI has confirmed boot output. First TXO test should be Enter only."
             }
         }
         baud_presets = ["9600", "115200", "57600", "38400", "19200", "4800", "1200", "custom"]
@@ -316,29 +342,53 @@ This tool will help you reset the password on your Cisco 4321 ISR router.
                 "Selected Cable",
                 f"{cable_types[cable_choice]['label']}\n{cable_types[cable_choice]['note']}"
             )
+            signal_menu = "\n".join(
+                f"{key}. {info['signal']} - {info['role']}" for key, info in ft232_signals.items()
+            )
+            self.show_info_panel("FT232RL Signal Under Test", signal_menu)
+            signal_choice = Prompt.ask(
+                "Connected FT232RL signal besides GND",
+                choices=list(ft232_signals.keys()),
+                default="1",
+                show_choices=False
+            )
+            self.show_info_panel(
+                "Signal Meaning",
+                f"{ft232_signals[signal_choice]['signal']} - {ft232_signals[signal_choice]['role']}\n"
+                f"{ft232_signals[signal_choice]['note']}"
+            )
             ground_label = Prompt.ask("Cisco ground candidate label", default="unknown/selected GND candidate")
             rx_labels_text = Prompt.ask(
-                "Cisco RX-test candidate labels, comma-separated",
+                "Cisco candidate labels, comma-separated",
                 default="next candidate pin"
             )
             notes = Prompt.ask(
                 "Photo/orientation/wire-color notes",
                 default="none"
             )
-            auto_baud = self.confirm("Run auto-baud sweep for each RX candidate?", default=False)
-            baud_choice = Prompt.ask(
-                "Discovery baud rate",
-                choices=baud_presets,
-                default="9600",
-                show_choices=False
-            )
-            if auto_baud:
-                baudrates = sweep_bauds
-            elif baud_choice == "custom":
-                baudrates = [IntPrompt.ask("Custom baud rate", default=9600)]
+            if ft232_signals[signal_choice]["signal"] == "TXO":
+                auto_baud = False
+                baudrates = [0]
+                duration = 0
+                self.show_info_panel(
+                    "TXO Candidate Recording",
+                    "TXO is an adapter output. The tool will record these candidates as possible Cisco RX/input pins without passive listening."
+                )
             else:
-                baudrates = [int(baud_choice)]
-            duration = IntPrompt.ask("Listen duration in seconds", default=60)
+                auto_baud = self.confirm("Run auto-baud sweep for each RX candidate?", default=False)
+                baud_choice = Prompt.ask(
+                    "Discovery baud rate",
+                    choices=baud_presets,
+                    default="9600",
+                    show_choices=False
+                )
+                if auto_baud:
+                    baudrates = sweep_bauds
+                elif baud_choice == "custom":
+                    baudrates = [IntPrompt.ask("Custom baud rate", default=9600)]
+                else:
+                    baudrates = [int(baud_choice)]
+                duration = IntPrompt.ask("Listen duration in seconds", default=60)
             output_file = Prompt.ask("Save boot log to", default=default_log_file)
         else:
             print("\nConnected cable type:")
@@ -346,22 +396,36 @@ This tool will help you reset the password on your Cisco 4321 ISR router.
                 print(f"{key}. {info['label']}")
             cable_choice = input("Cable type [1]: ").strip() or "1"
             if cable_choice not in cable_types:
-                cable_choice = "7"
+                cable_choice = "8"
             print(f"Selected: {cable_types[cable_choice]['label']}")
             print(cable_types[cable_choice]["note"])
+            print("\nConnected FT232RL signal besides GND:")
+            for key, info in ft232_signals.items():
+                print(f"{key}. {info['signal']} - {info['role']}")
+            signal_choice = input("Signal [1]: ").strip() or "1"
+            if signal_choice not in ft232_signals:
+                signal_choice = "1"
+            print(f"Selected: {ft232_signals[signal_choice]['signal']} - {ft232_signals[signal_choice]['role']}")
+            print(ft232_signals[signal_choice]["note"])
             ground_label = input("Cisco ground candidate label [unknown/selected GND candidate]: ").strip() or "unknown/selected GND candidate"
-            rx_labels_text = input("Cisco RX-test candidate labels, comma-separated [next candidate pin]: ").strip() or "next candidate pin"
+            rx_labels_text = input("Cisco candidate labels, comma-separated [next candidate pin]: ").strip() or "next candidate pin"
             notes = input("Photo/orientation/wire-color notes [none]: ").strip() or "none"
-            auto_baud = self.confirm("Run auto-baud sweep for each RX candidate?", default=False)
-            if auto_baud:
-                baudrates = sweep_bauds
+            if ft232_signals[signal_choice]["signal"] == "TXO":
+                auto_baud = False
+                baudrates = [0]
+                duration = 0
+                print("TXO is an adapter output; candidates will be recorded without passive listening.")
             else:
-                baud_choice = input("Discovery baud rate [9600, 115200, 57600, 38400, 19200, 4800, 1200, custom] [9600]: ").strip() or "9600"
-                if baud_choice == "custom":
-                    baudrates = [int(input("Custom baud rate [9600]: ").strip() or "9600")]
+                auto_baud = self.confirm("Run auto-baud sweep for each RX candidate?", default=False)
+                if auto_baud:
+                    baudrates = sweep_bauds
                 else:
-                    baudrates = [int(baud_choice) if baud_choice.isdigit() else 9600]
-            duration = int(input("Listen duration in seconds [60]: ").strip() or "60")
+                    baud_choice = input("Discovery baud rate [9600, 115200, 57600, 38400, 19200, 4800, 1200, custom] [9600]: ").strip() or "9600"
+                    if baud_choice == "custom":
+                        baudrates = [int(input("Custom baud rate [9600]: ").strip() or "9600")]
+                    else:
+                        baudrates = [int(baud_choice) if baud_choice.isdigit() else 9600]
+                duration = int(input("Listen duration in seconds [60]: ").strip() or "60")
             output_file = input(f"Save boot log to [{default_log_file}]: ").strip() or default_log_file
 
         rx_labels = [label.strip() for label in rx_labels_text.split(",") if label.strip()]
@@ -371,6 +435,9 @@ This tool will help you reset the password on your Cisco 4321 ISR router.
         return {
             "cable_type": cable_types[cable_choice]["label"],
             "cable_note": cable_types[cable_choice]["note"],
+            "adapter_signal": ft232_signals[signal_choice]["signal"],
+            "adapter_signal_role": ft232_signals[signal_choice]["role"],
+            "adapter_signal_note": ft232_signals[signal_choice]["note"],
             "ground_label": ground_label,
             "rx_labels": rx_labels,
             "rx_label": rx_labels[0],
@@ -387,11 +454,12 @@ This tool will help you reset the password on your Cisco 4321 ISR router.
         content = (
             f"Attempt: {attempt.get('attempt_index', '?')}\n"
             f"Cable: {attempt.get('cable_type', 'unknown')}\n"
+            f"FT232RL signal: {attempt.get('adapter_signal', 'RXI')} ({attempt.get('adapter_signal_role', 'Find Cisco TX/output')})\n"
             f"Adapter GND -> {attempt.get('ground_label', 'unknown')}\n"
-            f"Adapter RX  -> {attempt.get('rx_label', 'unknown')}\n"
+            f"Adapter {attempt.get('adapter_signal', 'RXI')} -> {attempt.get('rx_label', 'unknown')}\n"
             f"Baud rate: {attempt.get('baudrate', 'unknown')}\n\n"
             "Required state:\n"
-            "- Adapter TX disconnected\n"
+            "- FT232RL VCC disconnected\n"
             "- Adapter power pins disconnected\n"
             "- Adapter CTS/DTR/RTS disconnected\n"
             "- Every non-test Cisco pin empty/floating"
@@ -412,8 +480,9 @@ This tool will help you reset the password on your Cisco 4321 ISR router.
         detected = result.get("detected_boot_text", False)
         content = (
             f"Cable type: {result.get('cable_type', 'unknown')}\n"
+            f"FT232RL signal: {result.get('adapter_signal', 'RXI')}\n"
             f"Tested GND candidate: {result.get('ground_label', 'unknown')}\n"
-            f"Tested RX candidate: {result.get('rx_label', 'unknown')}\n"
+            f"Tested Cisco candidate: {result.get('rx_label', 'unknown')}\n"
             f"Baud rate: {result.get('baudrate', 'unknown')}\n"
             f"Captured: {result.get('bytes_captured', 0):,} bytes\n"
             f"Classification: {result.get('classification', 'unknown')}\n"

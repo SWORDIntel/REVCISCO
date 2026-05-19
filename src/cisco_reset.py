@@ -556,6 +556,10 @@ class CiscoReset:
             "port": port,
             "cable_type": settings.get("cable_type", "unknown"),
             "cable_note": settings.get("cable_note", "unknown"),
+            "adapter_layout": "FT232RL header order: DTR RXI TXO VCC CTS GND",
+            "adapter_signal": settings.get("adapter_signal", "RXI"),
+            "adapter_signal_role": settings.get("adapter_signal_role", "Find Cisco TX/output"),
+            "adapter_signal_note": settings.get("adapter_signal_note", ""),
             "ground_label": settings.get("ground_label", "unknown"),
             "rx_labels": settings.get("rx_labels", [settings.get("rx_label", "unknown")]),
             "baudrates": settings.get("baudrates", [settings.get("baudrate", self._default_baudrate())]),
@@ -576,6 +580,8 @@ class CiscoReset:
                         "attempt_index": attempt_index,
                         "port": port,
                         "cable_type": session["cable_type"],
+                        "adapter_signal": session["adapter_signal"],
+                        "adapter_signal_role": session["adapter_signal_role"],
                         "ground_label": session["ground_label"],
                         "rx_label": rx_label,
                         "baudrate": int(baudrate)
@@ -617,6 +623,23 @@ class CiscoReset:
                                     attempt: Dict[str, Any], log_file: Any) -> Dict[str, Any]:
         """Run one receive-only UART discovery attempt."""
         baudrate = int(attempt["baudrate"])
+        if attempt.get("adapter_signal") == "TXO":
+            result = {
+                **attempt,
+                "bytes_captured": 0,
+                "output_file": getattr(log_file, "name", "unknown"),
+                "detected_boot_text": False,
+                "classification": "txo_candidate_recorded",
+                "recommendation": self._build_uart_attempt_recommendation("txo_candidate_recorded"),
+                "printable_ratio": 0.0,
+                "replacement_chars": 0,
+                "line_count": 0,
+                "nonempty_line_count": 0,
+                "sample": ""
+            }
+            self._write_discovery_attempt_log(log_file, settings, result, "")
+            return result
+
         discovery_conn = SerialConnection(
             port=port,
             baudrate=baudrate,
@@ -710,7 +733,8 @@ class CiscoReset:
             "unreadable_output": "Electrical activity was captured but text is corrupt. Try another baud rate, check ground/noise, or consider inverted/non-TTL signaling.",
             "no_output": "No data seen. Move adapter RX to the next candidate pin or re-check the ground candidate.",
             "connection_failed": "Serial port could not be opened. Check permissions, cable path, and other serial tools.",
-            "skipped": "Attempt skipped by user."
+            "skipped": "Attempt skipped by user.",
+            "txo_candidate_recorded": "FT232RL TXO marks a suspected Cisco RX/input candidate. Verify only after RXI has found Cisco TX/output; first test should be Enter only."
         }
         return recommendations.get(classification, "Review wiring and repeat the attempt.")
 
@@ -719,8 +743,12 @@ class CiscoReset:
         log_file.write("# UART Pin Discovery Session Log\n")
         log_file.write(f"# Started: {session['started_at']}\n")
         log_file.write(f"# Port: {session['port']}\n")
+        log_file.write(f"# Adapter layout: {session.get('adapter_layout', 'unknown')}\n")
         log_file.write(f"# Cable type: {session['cable_type']}\n")
         log_file.write(f"# Cable note: {session['cable_note']}\n")
+        log_file.write(f"# Adapter signal: {session.get('adapter_signal', 'unknown')}\n")
+        log_file.write(f"# Adapter signal role: {session.get('adapter_signal_role', 'unknown')}\n")
+        log_file.write(f"# Adapter signal note: {session.get('adapter_signal_note', 'unknown')}\n")
         log_file.write(f"# Cisco ground candidate: {session['ground_label']}\n")
         log_file.write(f"# RX candidates: {', '.join(session['rx_labels'])}\n")
         log_file.write(f"# Baud rates: {', '.join(str(baud) for baud in session['baudrates'])}\n")
@@ -735,8 +763,10 @@ class CiscoReset:
         log_file.write(f"# Baud rate: {result['baudrate']}\n")
         log_file.write(f"# Cable type: {result['cable_type']}\n")
         log_file.write(f"# Cable note: {settings.get('cable_note', 'unknown')}\n")
+        log_file.write(f"# Adapter signal: {result.get('adapter_signal', 'unknown')}\n")
+        log_file.write(f"# Adapter signal role: {result.get('adapter_signal_role', 'unknown')}\n")
         log_file.write(f"# Cisco ground candidate: {result['ground_label']}\n")
-        log_file.write(f"# Cisco RX-test candidate: {result['rx_label']}\n")
+        log_file.write(f"# Cisco candidate: {result['rx_label']}\n")
         log_file.write(f"# Classification: {result['classification']}\n")
         log_file.write(f"# Recommendation: {result.get('recommendation', 'unknown')}\n")
         log_file.write(f"# Bytes captured: {result['bytes_captured']}\n")
@@ -766,6 +796,8 @@ class CiscoReset:
                 pin_map.setdefault(rx_label, "skipped")
             elif classification == "connection_failed":
                 pin_map.setdefault(rx_label, "not tested; connection failed")
+            elif classification == "txo_candidate_recorded":
+                pin_map[rx_label] = "suspected Cisco RX/input candidate; needs TXO Enter-only verification"
         return pin_map
 
     def _build_uart_session_recommendations(self, attempts: List[Dict[str, Any]]) -> List[str]:
@@ -791,6 +823,12 @@ class CiscoReset:
                 "Discovery could not open the serial port.",
                 "Check dialout permissions, close other serial tools, and reconnect the USB adapter."
             ]
+        if any(attempt.get("classification") == "txo_candidate_recorded" for attempt in attempts):
+            return [
+                "FT232RL TXO candidates were recorded as possible Cisco RX/input pins.",
+                "TXO cannot be proven by passive listening; first find Cisco TX/output with FT232RL RXI.",
+                "After RXI is confirmed, use the TX introduction checklist and press Enter only."
+            ]
         return [
             "No output was captured from tested candidates.",
             "Try another RX candidate, verify the ground candidate, and power cycle during the listen window."
@@ -802,6 +840,8 @@ class CiscoReset:
             "attempt_index",
             "rx_label",
             "ground_label",
+            "adapter_signal",
+            "adapter_signal_role",
             "baudrate",
             "classification",
             "bytes_captured",

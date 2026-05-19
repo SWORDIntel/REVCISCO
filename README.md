@@ -355,6 +355,7 @@ Use this mode before any reset or transmit workflow when you are identifying the
 Discovery mode supports several common cable styles:
 
 ```text
+FT232RL 6-pin header:       DTR, RXI, TXO, VCC, CTS, GND
 6-pin USB-TTL board:        GND, RXD/RX, TXD/TX, VCC, CTS, DTR
 4/5-pin USB-TTL lead:       GND, RX, TX, VCC, optional 3V3/5V
 3-wire UART lead:           GND, RX, TX
@@ -366,8 +367,8 @@ DB9/RS-232 adapter:         not safe to connect directly to TTL UART_DEBUG pins
 Only these two electrical connections should exist during discovery:
 
 ```text
-Adapter GND  -> one Cisco ground candidate
-Adapter RX   -> one Cisco TX-output candidate
+FT232RL GND  -> one Cisco ground candidate
+FT232RL RXI  -> one Cisco TX-output candidate
 ```
 
 Everything else must be disconnected or floating:
@@ -382,19 +383,29 @@ Adapter RTS
 Every Cisco pin not in the current two-wire test
 ```
 
-RX/TX labels are from the adapter's perspective. The adapter `RX` pin listens to the Cisco pin that transmits boot output. Do not trust wire color alone; use printed pin labels or continuity checks where possible.
+FT232RL signal meaning:
+
+```text
+RXI = adapter receive input. Connect this to suspected Cisco TX/output.
+TXO = adapter transmit output. Connect this to suspected Cisco RX/input only after RXI confirms output.
+VCC = power. Leave disconnected from the Cisco UART_DEBUG header.
+DTR/CTS = control/flow pins. Leave disconnected for discovery.
+```
+
+RX/TX labels are from the adapter's perspective. The adapter `RXI` pin listens to the Cisco pin that transmits boot output. `GND+TXO` alone cannot passively identify a pin because TXO is an output from the adapter. Do not trust wire color alone; use printed pin labels or continuity checks where possible.
 
 General discovery loop:
 
 ```text
 1. Pick a likely Cisco ground pin.
 2. Keep adapter GND on that ground candidate.
-3. Enter one or more RX candidate labels, separated by commas.
-4. In option 1, select the cable type and enter photo/orientation/wire-color notes.
-5. Select a single baud rate or enable auto-baud sweep.
-6. Confirm each attempt before listening.
-7. Power cycle the router during each listen window.
-8. Check the session summary for bytes captured, readability quality, output classification, recommendations, and pin map status.
+3. Select the connected FT232RL signal: RXI to find Cisco TX/output, or TXO to record suspected Cisco RX/input.
+4. Enter one or more Cisco candidate labels, separated by commas.
+5. In option 1, select the cable type and enter photo/orientation/wire-color notes.
+6. Select a single baud rate or enable auto-baud sweep.
+7. Confirm each attempt before listening.
+8. Power cycle the router during each RXI listen window.
+9. Check the session summary for bytes captured, readability quality, output classification, recommendations, and pin map status.
 ```
 
 Pass condition:
@@ -418,6 +429,7 @@ readable_unknown    readable text or prompts, but no Cisco boot signature
 unreadable_output   bytes captured, but likely wrong baud/noise/inverted UART
 no_output           no bytes captured during the listen window
 connection_failed   serial port could not be opened
+txo_candidate_recorded  FT232RL TXO candidate recorded; passive listen cannot prove it
 skipped             attempt was skipped at the confirmation prompt
 ```
 
@@ -425,12 +437,12 @@ For the earlier suspected mapping, test exactly:
 
 ```text
 Brown/tan adapter GND -> Cisco Pin 1
-Adapter RX wire       -> Cisco Pin 2
+FT232RL RXI wire      -> Cisco Pin 2
 Cisco Pin 3           -> empty
 Cisco Pin 4           -> empty
 ```
 
-If the yellow wire is the one plugged into adapter RX, yellow is the RX test wire. Do not connect red/orange or any adapter power lead to the Cisco header.
+If the yellow wire is the one plugged into adapter RXI, yellow is the RXI test wire. Do not connect red/orange or any adapter power lead to the Cisco header.
 
 Option 1 listens receive-only and saves:
 

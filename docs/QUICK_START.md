@@ -45,13 +45,13 @@ The tool now shows a Cisco 4321 ISR preflight before connecting, checks router i
 
 Use option 1 before reset work when you are identifying the Cisco `UART_DEBUG` header.
 
-Discovery mode supports common cable styles including 6-pin USB-TTL boards, 4/5-pin USB-TTL leads, 3-wire UART leads, keyed JST/Dupont harnesses, RJ45/rollover console cables, and DB9/RS-232 adapters.
+Discovery mode supports common cable styles including the FT232RL 6-pin header (`DTR RXI TXO VCC CTS GND`), generic 6-pin USB-TTL boards, 4/5-pin USB-TTL leads, 3-wire UART leads, keyed JST/Dupont harnesses, RJ45/rollover console cables, and DB9/RS-232 adapters.
 
 Correct receive-only test wiring:
 
 ```text
-Adapter GND  -> one Cisco ground candidate
-Adapter RX   -> one Cisco TX-output candidate
+FT232RL GND  -> one Cisco ground candidate
+FT232RL RXI  -> one Cisco TX-output candidate
 ```
 
 Everything else stays disconnected:
@@ -61,11 +61,11 @@ Adapter TX/VCC/3V3/5V/CTS/DTR/RTS -> disconnected
 All other Cisco pins              -> empty
 ```
 
-Test combinations one at a time: select the cable type in option 1, keep adapter GND on a likely ground, enter one or more RX candidate labels, select a baud or enable auto-baud sweep, power cycle during each listen window, and record the first pair that produces readable Cisco boot text. Try 9600 first, then 115200 if 9600 is silent. RX/TX labels are from the adapter's perspective, so adapter RX listens to Cisco TX output.
+Test combinations one at a time: select the cable type in option 1, keep adapter GND on a likely ground, select the connected FT232RL signal, enter one or more Cisco candidate labels, select a baud or enable auto-baud sweep, power cycle during each RXI listen window, and record the first pair that produces readable Cisco boot text. Try 9600 first, then 115200 if 9600 is silent. `RXI` listens to Cisco TX output. `TXO` is adapter transmit output and is only useful later as a suspected Cisco RX/input test.
 
-The discovery result classifies each attempt as `boot_text`, `readable_unknown`, `unreadable_output`, `no_output`, `connection_failed`, or `skipped`. It also reports readability quality, shows next-step recommendations, and writes a combined log plus `.session.json` and `.attempts.csv` files containing the tested cable type, notes, attempts, and generated pin map.
+The discovery result classifies each attempt as `boot_text`, `readable_unknown`, `unreadable_output`, `no_output`, `connection_failed`, `txo_candidate_recorded`, or `skipped`. It also reports readability quality, shows next-step recommendations, and writes a combined log plus `.session.json` and `.attempts.csv` files containing the tested cable type, notes, attempts, and generated pin map.
 
-For the earlier suspected mapping, use brown/tan from adapter GND on Cisco Pin 1 and the adapter RX wire on Cisco Pin 2. If yellow is plugged into adapter RX, yellow is the RX test wire. Keep red, orange, adapter power pins, and every non-test Cisco pin disconnected.
+For the earlier suspected mapping, use brown/tan from adapter GND on Cisco Pin 1 and the adapter RXI wire on Cisco Pin 2. If yellow is plugged into adapter RXI, yellow is the RXI test wire. Keep red, orange, adapter power pins, and every non-test Cisco pin disconnected.
 
 ## Testing
 

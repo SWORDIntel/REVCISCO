@@ -6,9 +6,9 @@
 
 1. **UART Pin Discovery** ✅
    - Receive-only candidate-pair checklist for unknown UART headers
-   - Handles 6-pin USB-TTL boards, 4/5-pin leads, 3-wire UART leads, keyed harnesses, RJ45 console cables, DB9/RS-232 adapters, and unknown cable types
+   - Handles FT232RL 6-pin headers, 6-pin USB-TTL boards, 4/5-pin leads, 3-wire UART leads, keyed harnesses, RJ45 console cables, DB9/RS-232 adapters, and unknown cable types
    - Keeps TX, power, CTS, DTR, and RTS disconnected during receive-only probing
-   - Supports multiple RX candidates, auto-baud sweep, output classification, readability metrics, session JSON/CSV export, pin map summaries, recommendations, notes, and a TX introduction checklist
+   - Distinguishes FT232RL RXI passive capture from TXO candidate recording, then supports multiple candidates, auto-baud sweep, output classification, readability metrics, session JSON/CSV export, pin map summaries, recommendations, notes, and a TX introduction checklist
 
 2. **Guided Cisco 4321 ISR Reset** ✅
    - Full guided password reset workflow
