@@ -55,6 +55,22 @@ DTR  RXI  TXO  VCC  CTS  GND
 
 Start with Cisco Pin 1 as the ground candidate and Cisco Pin 2, Pin 3, Pin 4 as signal candidates unless your photo/markings show otherwise.
 
+Use the fan as the reference point for the 4-pin header:
+
+```text
+      Cisco 4321 ISR board, cover removed
+  +------------------------------------------------+
+  |   [ FAN / BLOWER ]                             |
+  |       || reference side                        |
+  |       \/                                       |
+  |                                                |
+  |        UART_DEBUG candidate header             |
+  |        fan side ->  [ 1 ] [ 2 ] [ 3 ] [ 4 ]    |
+  +------------------------------------------------+
+```
+
+Default assumption: Pin 1 is nearest the fan/reference side. If your photo/header is rotated, relabel the candidates in option 1.
+
 Correct receive-only test wiring:
 
 ```text

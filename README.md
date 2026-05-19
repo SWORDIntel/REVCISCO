@@ -365,6 +365,25 @@ Ground candidate: Cisco Pin 1
 Signal candidates: Cisco Pin 2, Cisco Pin 3, Cisco Pin 4
 ```
 
+Use the fan as the physical reference point for numbering the 4-pin header:
+
+```text
+      Cisco 4321 ISR board, cover removed
+  +------------------------------------------------+
+  |                                                |
+  |   [ FAN / BLOWER ]                             |
+  |       || airflow/reference side                |
+  |       \/                                       |
+  |                                                |
+  |        UART_DEBUG candidate header             |
+  |        fan side ->  [ 1 ] [ 2 ] [ 3 ] [ 4 ]    |
+  |                                                |
+  +------------------------------------------------+
+
+Default assumption: Pin 1 is nearest the fan/reference side.
+If your photo/header is rotated, relabel the candidates in the prompts.
+```
+
 Discovery mode supports several common cable styles:
 
 ```text
