@@ -376,7 +376,9 @@ Use the fan as the physical reference point for numbering the 4-pin header:
   |       \/                                       |
   |                                                |
   |        UART_DEBUG candidate header             |
-  |        fan side ->  [ 1 ] [ 2 ] [ 3 ] [ 4 ]    |
+  |        fan side ->  +---+ +---+ +---+ +---+  |
+  |                     | 1 | | 2 | | 3 | | 4 |  |
+  |                     +---+ +---+ +---+ +---+  |
   |                                                |
   +------------------------------------------------+
 
