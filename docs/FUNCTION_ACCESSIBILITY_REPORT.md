@@ -10,7 +10,7 @@ All major workflows are reachable from the TUI. The current main menu has 15 opt
    - Receive-only candidate-pair wiring checklist
    - Handles FT232RL 6-pin headers, 6-pin USB-TTL boards, 4/5-pin leads, 3-wire UART leads, keyed harnesses, RJ45 console cables, DB9/RS-232 adapters, and unknown cable types
    - Keeps TX, power, CTS, DTR, and RTS disconnected during receive-only probing
-   - Distinguishes FT232RL RXI passive capture from TXO candidate recording, then supports multiple candidates, auto-baud sweep, output classification, readability metrics, session JSON/CSV export, pin map summaries, recommendations, notes, and a TX introduction checklist
+   - Distinguishes FT232RL RXI passive capture from TXO candidate recording, then supports Cisco Pin 1-4 defaults, multiple candidates, auto-baud sweep, output classification, readability metrics, session JSON/CSV export, pin map summaries, final wiring plans, recommendations, notes, and a TX introduction checklist
    - Saves discovery logs under `logs/uart_pin_discovery_*.log`
 
 2. **Guided Cisco 4321 ISR Reset**

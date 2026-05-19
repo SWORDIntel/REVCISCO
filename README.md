@@ -352,6 +352,19 @@ See [docs/INSTALL.md](docs/INSTALL.md) for detailed manual installation instruct
 
 Use this mode before any reset or transmit workflow when you are identifying the Cisco `UART_DEBUG` header.
 
+For your FT232RL board, the tool assumes this physical header order:
+
+```text
+DTR  RXI  TXO  VCC  CTS  GND
+```
+
+The guided defaults assume a 4-pin Cisco candidate header:
+
+```text
+Ground candidate: Cisco Pin 1
+Signal candidates: Cisco Pin 2, Cisco Pin 3, Cisco Pin 4
+```
+
 Discovery mode supports several common cable styles:
 
 ```text
@@ -405,7 +418,7 @@ General discovery loop:
 6. Select a single baud rate or enable auto-baud sweep.
 7. Confirm each attempt before listening.
 8. Power cycle the router during each RXI listen window.
-9. Check the session summary for bytes captured, readability quality, output classification, recommendations, and pin map status.
+9. Check the session summary for bytes captured, readability quality, output classification, recommendations, pin map status, and final wiring plan.
 ```
 
 Pass condition:
@@ -453,6 +466,17 @@ logs/uart_pin_discovery_*.log.attempts.csv  spreadsheet-friendly attempt summary
 ```
 
 After boot text is found, the tool can show a separate TX introduction checklist. Keep VCC/3V3/5V disconnected; the first TX test should be pressing Enter only.
+
+Expected final wiring after successful discovery:
+
+```text
+FT232RL GND -> Cisco GND
+FT232RL RXI -> Cisco TX/output
+FT232RL TXO -> Cisco RX/input
+FT232RL VCC -> disconnected
+FT232RL DTR -> disconnected
+FT232RL CTS -> disconnected
+```
 
 ### Quick System Inventory
 

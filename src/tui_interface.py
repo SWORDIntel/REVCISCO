@@ -214,6 +214,11 @@ This tool will help you reset the password on your Cisco 4321 ISR router.
         permission = "OK" if in_dialout_group else "Needs attention"
         content = (
             "Use this before any reset workflow to identify Cisco UART_DEBUG pins safely.\n\n"
+            "Primary setup for this project:\n"
+            "  FT232RL adapter header order: DTR RXI TXO VCC CTS GND\n"
+            "  Cisco target: 4-pin UART_DEBUG candidate header\n"
+            "  First goal: find Cisco GND and Cisco TX/output with FT232RL GND+RXI\n"
+            "  Second goal: record/verify Cisco RX/input with FT232RL TXO after RXI works\n\n"
             "Supported cable styles:\n"
             "  - FT232RL 6-pin header: DTR, RXI, TXO, VCC, CTS, GND\n"
             "  - 6-pin USB-TTL board: GND, RXD/RX, TXD/TX, VCC, CTS, DTR\n"
@@ -264,14 +269,14 @@ This tool will help you reset the password on your Cisco 4321 ISR router.
                     ["Do not connect adapter TX or power pins", "Confirm dialout group access"]
                 )
                 return False
-            return self.confirm("Confirm this is a two-wire receive-only test: adapter GND plus FT232RL RXI only?", default=False)
+            return self.confirm("Confirm only FT232RL GND plus one signal wire is connected, with VCC/DTR/CTS disconnected?", default=False)
 
         print("\nUART Pin Discovery")
         print("-" * 80)
         print(content)
         if not ports:
             return False
-        return self.confirm("Confirm this is a two-wire receive-only test: adapter GND plus FT232RL RXI only?", default=False)
+        return self.confirm("Confirm only FT232RL GND plus one signal wire is connected, with VCC/DTR/CTS disconnected?", default=False)
 
     def show_uart_discovery_settings(self, default_log_file: str) -> Optional[Dict[str, Any]]:
         """Collect UART discovery listener settings."""
@@ -342,6 +347,12 @@ This tool will help you reset the password on your Cisco 4321 ISR router.
                 "Selected Cable",
                 f"{cable_types[cable_choice]['label']}\n{cable_types[cable_choice]['note']}"
             )
+            self.show_info_panel(
+                "FT232RL Physical Layout",
+                "Header order on your adapter:\n\n"
+                "  DTR  RXI  TXO  VCC  CTS  GND\n\n"
+                "Use GND plus exactly one signal during discovery. VCC stays disconnected."
+            )
             signal_menu = "\n".join(
                 f"{key}. {info['signal']} - {info['role']}" for key, info in ft232_signals.items()
             )
@@ -357,10 +368,10 @@ This tool will help you reset the password on your Cisco 4321 ISR router.
                 f"{ft232_signals[signal_choice]['signal']} - {ft232_signals[signal_choice]['role']}\n"
                 f"{ft232_signals[signal_choice]['note']}"
             )
-            ground_label = Prompt.ask("Cisco ground candidate label", default="unknown/selected GND candidate")
+            ground_label = Prompt.ask("Cisco ground candidate label", default="Cisco Pin 1")
             rx_labels_text = Prompt.ask(
                 "Cisco candidate labels, comma-separated",
-                default="next candidate pin"
+                default="Cisco Pin 2,Cisco Pin 3,Cisco Pin 4"
             )
             notes = Prompt.ask(
                 "Photo/orientation/wire-color notes",
@@ -407,8 +418,10 @@ This tool will help you reset the password on your Cisco 4321 ISR router.
                 signal_choice = "1"
             print(f"Selected: {ft232_signals[signal_choice]['signal']} - {ft232_signals[signal_choice]['role']}")
             print(ft232_signals[signal_choice]["note"])
-            ground_label = input("Cisco ground candidate label [unknown/selected GND candidate]: ").strip() or "unknown/selected GND candidate"
-            rx_labels_text = input("Cisco candidate labels, comma-separated [next candidate pin]: ").strip() or "next candidate pin"
+            print("\nFT232RL physical layout: DTR RXI TXO VCC CTS GND")
+            print("Use GND plus exactly one signal during discovery. VCC stays disconnected.")
+            ground_label = input("Cisco ground candidate label [Cisco Pin 1]: ").strip() or "Cisco Pin 1"
+            rx_labels_text = input("Cisco candidate labels, comma-separated [Cisco Pin 2,Cisco Pin 3,Cisco Pin 4]: ").strip() or "Cisco Pin 2,Cisco Pin 3,Cisco Pin 4"
             notes = input("Photo/orientation/wire-color notes [none]: ").strip() or "none"
             if ft232_signals[signal_choice]["signal"] == "TXO":
                 auto_baud = False
@@ -564,6 +577,9 @@ This tool will help you reset the password on your Cisco 4321 ISR router.
                 f"Session JSON: {session.get('session_file')}\n"
                 f"Attempt CSV: {session.get('csv_file')}"
             )
+            wiring_plan = session.get("wiring_plan", [])
+            if wiring_plan:
+                self.show_info_panel("Final Wiring Plan", "\n".join(f"- {item}" for item in wiring_plan))
             recommendations = session.get("recommendations", [])
             if recommendations:
                 self.show_info_panel("Recommendations", "\n".join(f"- {item}" for item in recommendations))
@@ -582,6 +598,9 @@ This tool will help you reset the password on your Cisco 4321 ISR router.
                 print(f"- {pin}: {status}")
             print("\nRecommendations:")
             for item in session.get("recommendations", []):
+                print(f"- {item}")
+            print("\nFinal Wiring Plan:")
+            for item in session.get("wiring_plan", []):
                 print(f"- {item}")
             print(f"\nCombined log: {session.get('combined_log_file')}")
             print(f"Session JSON: {session.get('session_file')}")

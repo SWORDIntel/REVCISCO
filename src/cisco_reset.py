@@ -604,6 +604,7 @@ class CiscoReset:
         session["ended_at"] = datetime.now().isoformat(timespec="seconds")
         session["attempts"] = attempts
         session["pin_map"] = self._build_uart_pin_map(session["ground_label"], attempts)
+        session["wiring_plan"] = self._build_ft232rl_wiring_plan(session["ground_label"], attempts)
         session["recommendations"] = self._build_uart_session_recommendations(attempts)
         session["combined_log_file"] = str(output_path)
         session["session_file"] = str(session_file)
@@ -833,6 +834,47 @@ class CiscoReset:
             "No output was captured from tested candidates.",
             "Try another RX candidate, verify the ground candidate, and power cycle during the listen window."
         ]
+
+    def _build_ft232rl_wiring_plan(self, ground_label: str, attempts: List[Dict[str, Any]]) -> List[str]:
+        """Generate final FT232RL-to-Cisco wiring guidance from discovery attempts."""
+        plan = [
+            "FT232RL GND -> confirmed/selected Cisco ground candidate: " + ground_label,
+            "FT232RL VCC -> disconnected",
+            "FT232RL DTR -> disconnected",
+            "FT232RL CTS -> disconnected"
+        ]
+
+        tx_output = next(
+            (attempt for attempt in attempts if attempt.get("adapter_signal") == "RXI" and attempt.get("classification") == "boot_text"),
+            None
+        )
+        readable_output = next(
+            (attempt for attempt in attempts if attempt.get("adapter_signal") == "RXI" and attempt.get("classification") == "readable_unknown"),
+            None
+        )
+        rx_input = next(
+            (attempt for attempt in attempts if attempt.get("adapter_signal") == "TXO" and attempt.get("classification") == "txo_candidate_recorded"),
+            None
+        )
+
+        if tx_output:
+            plan.append(f"FT232RL RXI -> Cisco TX/output: {tx_output.get('rx_label')} at {tx_output.get('baudrate')} baud")
+        elif readable_output:
+            plan.append(f"FT232RL RXI -> possible Cisco TX/output: {readable_output.get('rx_label')} at {readable_output.get('baudrate')} baud; verify content")
+        else:
+            plan.append("FT232RL RXI -> unknown; keep testing candidate Cisco pins for readable boot output")
+
+        if rx_input:
+            plan.append(f"FT232RL TXO -> suspected Cisco RX/input: {rx_input.get('rx_label')}; verify only with Enter after RXI path works")
+        else:
+            plan.append("FT232RL TXO -> not connected yet; test suspected Cisco RX/input only after RXI path is confirmed")
+
+        if tx_output and rx_input:
+            plan.append("Expected final console wiring: GND common, FT232RL RXI to Cisco TX, FT232RL TXO to Cisco RX, VCC disconnected")
+        else:
+            plan.append("Do not connect both RXI and TXO until RXI has confirmed readable output and TXO candidate has been reviewed")
+
+        return plan
 
     def _write_discovery_attempt_csv(self, csv_file: Path, attempts: List[Dict[str, Any]]) -> None:
         """Write a CSV summary of UART discovery attempts."""
