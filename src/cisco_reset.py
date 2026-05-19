@@ -20,7 +20,7 @@ import zlib
 import logging
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, Optional
+from typing import Any, Dict, List, Optional
 
 # Import all modules
 from logging_monitor import LoggingMonitor
@@ -546,8 +546,72 @@ class CiscoReset:
         settings = self.tui.show_uart_discovery_settings(default_log)
         if not settings:
             return False
-        baudrate = int(settings.get("baudrate", self._default_baudrate()))
+        output_path = Path(settings["output_file"]).expanduser()
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        session_file = output_path.with_suffix(output_path.suffix + ".session.json")
+        session = {
+            "started_at": datetime.now().isoformat(timespec="seconds"),
+            "port": port,
+            "cable_type": settings.get("cable_type", "unknown"),
+            "cable_note": settings.get("cable_note", "unknown"),
+            "ground_label": settings.get("ground_label", "unknown"),
+            "rx_labels": settings.get("rx_labels", [settings.get("rx_label", "unknown")]),
+            "baudrates": settings.get("baudrates", [settings.get("baudrate", self._default_baudrate())]),
+            "duration": settings.get("duration"),
+            "notes": settings.get("notes", "none"),
+            "attempts": [],
+            "pin_map": {}
+        }
 
+        attempts: List[Dict[str, Any]] = []
+        attempt_index = 1
+        found_boot_text = False
+        with open(output_path, "w", encoding="utf-8", errors="replace") as log_file:
+            self._write_discovery_session_header(log_file, session)
+            for rx_label in session["rx_labels"]:
+                for baudrate in session["baudrates"]:
+                    attempt = {
+                        "attempt_index": attempt_index,
+                        "port": port,
+                        "cable_type": session["cable_type"],
+                        "ground_label": session["ground_label"],
+                        "rx_label": rx_label,
+                        "baudrate": int(baudrate)
+                    }
+                    attempt_index += 1
+                    if not self.tui.confirm_uart_discovery_attempt(attempt):
+                        attempt["classification"] = "skipped"
+                        attempts.append(attempt)
+                        continue
+
+                    result = self._run_uart_discovery_attempt(port, settings, attempt, log_file)
+                    attempts.append(result)
+                    found_boot_text = found_boot_text or result["detected_boot_text"]
+                    self.tui.show_uart_discovery_result(result)
+                    if result["detected_boot_text"]:
+                        break
+                if found_boot_text:
+                    break
+
+        session["ended_at"] = datetime.now().isoformat(timespec="seconds")
+        session["attempts"] = attempts
+        session["pin_map"] = self._build_uart_pin_map(session["ground_label"], attempts)
+        session["combined_log_file"] = str(output_path)
+        session["session_file"] = str(session_file)
+        session_file.write_text(json.dumps(session, indent=2), encoding="utf-8")
+        self.tui.show_uart_discovery_session_result(session)
+
+        successful = [attempt for attempt in attempts if attempt.get("detected_boot_text")]
+        if successful:
+            best = successful[0]
+            if self.tui.confirm("Show TX introduction checklist now?", default=False):
+                self.tui.show_uart_tx_intro_checklist(best["ground_label"], best["rx_label"])
+        return found_boot_text
+
+    def _run_uart_discovery_attempt(self, port: str, settings: Dict[str, Any],
+                                    attempt: Dict[str, Any], log_file: Any) -> Dict[str, Any]:
+        """Run one receive-only UART discovery attempt."""
+        baudrate = int(attempt["baudrate"])
         discovery_conn = SerialConnection(
             port=port,
             baudrate=baudrate,
@@ -555,12 +619,20 @@ class CiscoReset:
             metrics=self.log_monitor.metrics
         )
         if not discovery_conn.open(port, baudrate):
+            result = {
+                **attempt,
+                "bytes_captured": 0,
+                "output_file": getattr(log_file, "name", "unknown"),
+                "detected_boot_text": False,
+                "classification": "connection_failed",
+                "sample": ""
+            }
             self.tui.show_error_dialog(
                 "Discovery Connection Failed",
                 f"Could not open {port}",
                 ["Check USB UART permissions", "Close other serial tools", "Try a different adapter port"]
             )
-            return False
+            return result
 
         try:
             self.tui.show_status(
@@ -568,44 +640,90 @@ class CiscoReset:
                 "warning"
             )
             output = discovery_conn.read_output(settings["duration"])
-            output_path = Path(settings["output_file"]).expanduser()
-            output_path.parent.mkdir(parents=True, exist_ok=True)
-            with open(output_path, "w", encoding="utf-8", errors="replace") as f:
-                f.write("# UART Pin Discovery Log\n")
-                f.write(f"# Timestamp: {datetime.now().isoformat(timespec='seconds')}\n")
-                f.write(f"# Port: {port}\n")
-                f.write(f"# Baud rate: {baudrate}\n")
-                f.write(f"# Cable type: {settings.get('cable_type', 'unknown')}\n")
-                f.write(f"# Cable note: {settings.get('cable_note', 'unknown')}\n")
-                f.write(f"# Cisco ground candidate: {settings.get('ground_label', 'unknown')}\n")
-                f.write(f"# Cisco RX-test candidate: {settings.get('rx_label', 'unknown')}\n")
-                f.write("# Wiring rule: adapter GND plus adapter RX only; TX/power/control pins disconnected.\n")
-                f.write("# --- captured output follows ---\n")
-                f.write(output)
-
-            boot_patterns = [
-                "System Bootstrap",
-                "Cisco IOS",
-                "Cisco IOS XE",
-                "ROMMON",
-                "Initializing",
-                "Readonly ROMMON"
-            ]
-            detected = any(pattern.lower() in output.lower() for pattern in boot_patterns)
+            classification, detected = self._classify_uart_discovery_output(output)
             result = {
-                "cable_type": settings.get("cable_type", "unknown"),
-                "ground_label": settings.get("ground_label", "unknown"),
-                "rx_label": settings.get("rx_label", "unknown"),
-                "baudrate": baudrate,
+                **attempt,
                 "bytes_captured": len(output.encode("utf-8", errors="replace")),
-                "output_file": str(output_path),
+                "output_file": getattr(log_file, "name", "unknown"),
                 "detected_boot_text": detected,
+                "classification": classification,
                 "sample": output
             }
-            self.tui.show_uart_discovery_result(result)
-            return detected
+            self._write_discovery_attempt_log(log_file, settings, result, output)
+            return result
         finally:
             discovery_conn.close()
+
+    def _classify_uart_discovery_output(self, output: str) -> tuple:
+        """Classify discovery output into boot text, unreadable data, readable unknown, or no output."""
+        boot_patterns = [
+            "System Bootstrap",
+            "Cisco IOS",
+            "Cisco IOS XE",
+            "ROMMON",
+            "Initializing",
+            "Readonly ROMMON"
+        ]
+        if any(pattern.lower() in output.lower() for pattern in boot_patterns):
+            return "boot_text", True
+        if not output:
+            return "no_output", False
+
+        printable = sum(1 for char in output if char.isprintable() or char in "\r\n\t")
+        printable_ratio = printable / max(len(output), 1)
+        if "\ufffd" in output or printable_ratio < 0.65:
+            return "unreadable_output", False
+        return "readable_unknown", False
+
+    def _write_discovery_session_header(self, log_file: Any, session: Dict[str, Any]) -> None:
+        """Write metadata for a UART discovery session log."""
+        log_file.write("# UART Pin Discovery Session Log\n")
+        log_file.write(f"# Started: {session['started_at']}\n")
+        log_file.write(f"# Port: {session['port']}\n")
+        log_file.write(f"# Cable type: {session['cable_type']}\n")
+        log_file.write(f"# Cable note: {session['cable_note']}\n")
+        log_file.write(f"# Cisco ground candidate: {session['ground_label']}\n")
+        log_file.write(f"# RX candidates: {', '.join(session['rx_labels'])}\n")
+        log_file.write(f"# Baud rates: {', '.join(str(baud) for baud in session['baudrates'])}\n")
+        log_file.write(f"# Notes: {session.get('notes', 'none')}\n")
+        log_file.write("# Wiring rule: adapter GND plus adapter RX only; TX/power/control pins disconnected.\n\n")
+
+    def _write_discovery_attempt_log(self, log_file: Any, settings: Dict[str, Any],
+                                     result: Dict[str, Any], output: str) -> None:
+        """Append one attempt and its captured text to the combined session log."""
+        log_file.write(f"# --- attempt {result['attempt_index']} ---\n")
+        log_file.write(f"# Timestamp: {datetime.now().isoformat(timespec='seconds')}\n")
+        log_file.write(f"# Baud rate: {result['baudrate']}\n")
+        log_file.write(f"# Cable type: {result['cable_type']}\n")
+        log_file.write(f"# Cable note: {settings.get('cable_note', 'unknown')}\n")
+        log_file.write(f"# Cisco ground candidate: {result['ground_label']}\n")
+        log_file.write(f"# Cisco RX-test candidate: {result['rx_label']}\n")
+        log_file.write(f"# Classification: {result['classification']}\n")
+        log_file.write(f"# Bytes captured: {result['bytes_captured']}\n")
+        log_file.write("# --- captured output follows ---\n")
+        log_file.write(output)
+        log_file.write("\n# --- end attempt ---\n\n")
+        log_file.flush()
+
+    def _build_uart_pin_map(self, ground_label: str, attempts: List[Dict[str, Any]]) -> Dict[str, str]:
+        """Build a simple pin map from discovery attempt results."""
+        pin_map = {ground_label: "likely GND candidate"}
+        for attempt in attempts:
+            rx_label = attempt.get("rx_label", "unknown")
+            classification = attempt.get("classification", "unknown")
+            if classification == "boot_text":
+                pin_map[rx_label] = f"likely Cisco TX/output at {attempt.get('baudrate')} baud"
+            elif classification == "readable_unknown":
+                pin_map[rx_label] = f"readable output, verify baud/content at {attempt.get('baudrate')} baud"
+            elif classification == "unreadable_output":
+                pin_map[rx_label] = "activity seen, likely wrong baud/noise/inverted UART"
+            elif classification == "no_output":
+                pin_map.setdefault(rx_label, "silent for tested baud(s)")
+            elif classification == "skipped":
+                pin_map.setdefault(rx_label, "skipped")
+            elif classification == "connection_failed":
+                pin_map.setdefault(rx_label, "not tested; connection failed")
+        return pin_map
 
     def _detect_compression_format(self, input_path: Path) -> str:
         """Detect common compression/archive formats by magic bytes."""

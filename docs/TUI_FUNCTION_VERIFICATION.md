@@ -8,7 +8,7 @@
    - Receive-only candidate-pair checklist for unknown UART headers
    - Handles 6-pin USB-TTL boards, 4/5-pin leads, 3-wire UART leads, keyed harnesses, RJ45 console cables, DB9/RS-232 adapters, and unknown cable types
    - Keeps TX, power, CTS, DTR, and RTS disconnected during receive-only probing
-   - Captures boot output while labeling the cable type, baud rate, and tested ground/RX candidates
+   - Supports multiple RX candidates, auto-baud sweep, output classification, session JSON export, pin map summaries, notes, and a TX introduction checklist
 
 2. **Guided Cisco 4321 ISR Reset** ✅
    - Full guided password reset workflow

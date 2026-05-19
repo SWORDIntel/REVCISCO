@@ -301,6 +301,7 @@ This tool will help you reset the password on your Cisco 4321 ISR router.
             }
         }
         baud_presets = ["9600", "115200", "57600", "38400", "19200", "4800", "1200", "custom"]
+        sweep_bauds = [9600, 115200, 57600, 38400, 19200, 4800, 1200]
 
         if self.console:
             cable_menu = "\n".join(f"{key}. {info['label']}" for key, info in cable_types.items())
@@ -316,14 +317,27 @@ This tool will help you reset the password on your Cisco 4321 ISR router.
                 f"{cable_types[cable_choice]['label']}\n{cable_types[cable_choice]['note']}"
             )
             ground_label = Prompt.ask("Cisco ground candidate label", default="unknown/selected GND candidate")
-            rx_label = Prompt.ask("Cisco RX-test candidate label", default="next candidate pin")
+            rx_labels_text = Prompt.ask(
+                "Cisco RX-test candidate labels, comma-separated",
+                default="next candidate pin"
+            )
+            notes = Prompt.ask(
+                "Photo/orientation/wire-color notes",
+                default="none"
+            )
+            auto_baud = self.confirm("Run auto-baud sweep for each RX candidate?", default=False)
             baud_choice = Prompt.ask(
                 "Discovery baud rate",
                 choices=baud_presets,
                 default="9600",
                 show_choices=False
             )
-            baudrate = IntPrompt.ask("Custom baud rate", default=9600) if baud_choice == "custom" else int(baud_choice)
+            if auto_baud:
+                baudrates = sweep_bauds
+            elif baud_choice == "custom":
+                baudrates = [IntPrompt.ask("Custom baud rate", default=9600)]
+            else:
+                baudrates = [int(baud_choice)]
             duration = IntPrompt.ask("Listen duration in seconds", default=60)
             output_file = Prompt.ask("Save boot log to", default=default_log_file)
         else:
@@ -336,24 +350,59 @@ This tool will help you reset the password on your Cisco 4321 ISR router.
             print(f"Selected: {cable_types[cable_choice]['label']}")
             print(cable_types[cable_choice]["note"])
             ground_label = input("Cisco ground candidate label [unknown/selected GND candidate]: ").strip() or "unknown/selected GND candidate"
-            rx_label = input("Cisco RX-test candidate label [next candidate pin]: ").strip() or "next candidate pin"
-            baud_choice = input("Discovery baud rate [9600, 115200, 57600, 38400, 19200, 4800, 1200, custom] [9600]: ").strip() or "9600"
-            if baud_choice == "custom":
-                baudrate = int(input("Custom baud rate [9600]: ").strip() or "9600")
+            rx_labels_text = input("Cisco RX-test candidate labels, comma-separated [next candidate pin]: ").strip() or "next candidate pin"
+            notes = input("Photo/orientation/wire-color notes [none]: ").strip() or "none"
+            auto_baud = self.confirm("Run auto-baud sweep for each RX candidate?", default=False)
+            if auto_baud:
+                baudrates = sweep_bauds
             else:
-                baudrate = int(baud_choice) if baud_choice.isdigit() else 9600
+                baud_choice = input("Discovery baud rate [9600, 115200, 57600, 38400, 19200, 4800, 1200, custom] [9600]: ").strip() or "9600"
+                if baud_choice == "custom":
+                    baudrates = [int(input("Custom baud rate [9600]: ").strip() or "9600")]
+                else:
+                    baudrates = [int(baud_choice) if baud_choice.isdigit() else 9600]
             duration = int(input("Listen duration in seconds [60]: ").strip() or "60")
             output_file = input(f"Save boot log to [{default_log_file}]: ").strip() or default_log_file
+
+        rx_labels = [label.strip() for label in rx_labels_text.split(",") if label.strip()]
+        if not rx_labels:
+            rx_labels = ["next candidate pin"]
 
         return {
             "cable_type": cable_types[cable_choice]["label"],
             "cable_note": cable_types[cable_choice]["note"],
             "ground_label": ground_label,
-            "rx_label": rx_label,
-            "baudrate": baudrate,
+            "rx_labels": rx_labels,
+            "rx_label": rx_labels[0],
+            "baudrates": baudrates,
+            "baudrate": baudrates[0],
+            "auto_baud": auto_baud,
+            "notes": notes,
             "duration": float(duration),
             "output_file": output_file
         }
+
+    def confirm_uart_discovery_attempt(self, attempt: Dict[str, Any]) -> bool:
+        """Confirm the wiring before one UART discovery attempt."""
+        content = (
+            f"Attempt: {attempt.get('attempt_index', '?')}\n"
+            f"Cable: {attempt.get('cable_type', 'unknown')}\n"
+            f"Adapter GND -> {attempt.get('ground_label', 'unknown')}\n"
+            f"Adapter RX  -> {attempt.get('rx_label', 'unknown')}\n"
+            f"Baud rate: {attempt.get('baudrate', 'unknown')}\n\n"
+            "Required state:\n"
+            "- Adapter TX disconnected\n"
+            "- Adapter power pins disconnected\n"
+            "- Adapter CTS/DTR/RTS disconnected\n"
+            "- Every non-test Cisco pin empty/floating"
+        )
+        if self.console:
+            self.show_info_panel("Discovery Attempt Wiring", content)
+        else:
+            print("\nDiscovery Attempt Wiring")
+            print("-" * 80)
+            print(content)
+        return self.confirm("Start this receive-only listen attempt?", default=True)
 
     def show_uart_discovery_result(self, result: Dict[str, Any]) -> None:
         """Show UART discovery listener result."""
@@ -367,6 +416,7 @@ This tool will help you reset the password on your Cisco 4321 ISR router.
             f"Tested RX candidate: {result.get('rx_label', 'unknown')}\n"
             f"Baud rate: {result.get('baudrate', 'unknown')}\n"
             f"Captured: {result.get('bytes_captured', 0):,} bytes\n"
+            f"Classification: {result.get('classification', 'unknown')}\n"
             f"Saved: {result.get('output_file', 'unknown')}\n"
             f"Likely Cisco boot text: {'yes' if detected else 'no'}\n\n"
             "Recent output:\n"
@@ -383,7 +433,8 @@ This tool will help you reset the password on your Cisco 4321 ISR router.
         else:
             suggestions = [
                 "Power cycle the router while listening",
-                "Move adapter RX to the next candidate Cisco pin",
+                "If no bytes were captured, move adapter RX to the next candidate Cisco pin",
+                "If unreadable bytes were captured, try a different baud rate or inspect ground/noise",
                 "Keep adapter TX and all power/control pins disconnected",
                 "If every RX candidate is silent, re-check or change the ground candidate"
             ]
@@ -406,6 +457,74 @@ This tool will help you reset the password on your Cisco 4321 ISR router.
             for suggestion in suggestions:
                 print(f"- {suggestion}")
             input("\nPress Enter to continue...")
+
+    def show_uart_discovery_session_result(self, session: Dict[str, Any]) -> None:
+        """Show a summary for a multi-attempt UART discovery session."""
+        attempts = session.get("attempts", [])
+        pin_map = session.get("pin_map", {})
+        if self.console:
+            table = Table(title="UART Discovery Session")
+            table.add_column("#", style="cyan", width=4)
+            table.add_column("RX Candidate", style="white")
+            table.add_column("Baud", style="yellow", width=8)
+            table.add_column("Bytes", justify="right", width=10)
+            table.add_column("Result", style="green")
+            for attempt in attempts:
+                table.add_row(
+                    str(attempt.get("attempt_index", "")),
+                    str(attempt.get("rx_label", "")),
+                    str(attempt.get("baudrate", "")),
+                    f"{attempt.get('bytes_captured', 0):,}",
+                    str(attempt.get("classification", "unknown"))
+                )
+            self.console.print(table)
+            map_lines = [f"{pin}: {status}" for pin, status in pin_map.items()]
+            self.show_info_panel(
+                "Pin Map",
+                "\n".join(map_lines) if map_lines else "No pin map entries"
+            )
+            self.show_info_panel(
+                "Saved Files",
+                f"Combined log: {session.get('combined_log_file')}\nSession JSON: {session.get('session_file')}"
+            )
+            Prompt.ask("[bold cyan]Press Enter to continue[/bold cyan]", default="")
+        else:
+            print("\nUART Discovery Session")
+            print("-" * 80)
+            for attempt in attempts:
+                print(
+                    f"{attempt.get('attempt_index')}: {attempt.get('rx_label')} "
+                    f"@ {attempt.get('baudrate')} baud, {attempt.get('bytes_captured', 0)} bytes, "
+                    f"{attempt.get('classification')}"
+                )
+            print("\nPin Map:")
+            for pin, status in pin_map.items():
+                print(f"- {pin}: {status}")
+            print(f"\nCombined log: {session.get('combined_log_file')}")
+            print(f"Session JSON: {session.get('session_file')}")
+            input("\nPress Enter to continue...")
+
+    def show_uart_tx_intro_checklist(self, ground_label: str, rx_label: str) -> bool:
+        """Show checklist before introducing adapter TX after receive discovery."""
+        content = (
+            "Only do this after readable boot output has confirmed the receive path.\n\n"
+            f"Known receive pair:\n"
+            f"  Adapter GND -> {ground_label}\n"
+            f"  Adapter RX  -> {rx_label}\n\n"
+            "Before adding TX:\n"
+            "  - Keep VCC/3V3/5V disconnected\n"
+            "  - Keep CTS/DTR/RTS disconnected\n"
+            "  - Connect adapter TX only to a suspected Cisco RX/input pin\n"
+            "  - First test should be pressing Enter only\n"
+            "  - Stop if the router resets, output becomes unstable, or the adapter heats"
+        )
+        if self.console:
+            self.show_info_panel("TX Introduction Checklist", content)
+        else:
+            print("\nTX Introduction Checklist")
+            print("-" * 80)
+            print(content)
+        return self.confirm("Mark this checklist reviewed?", default=False)
 
     def show_cisco_4321_preflight(self, ports: list, baudrate: int = 9600,
                                   in_dialout_group: bool = False) -> bool:

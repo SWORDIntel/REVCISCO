@@ -170,7 +170,7 @@ START
 - **🛡️ Multiple Retry Strategies** - Exponential backoff, linear, fixed delay, and adaptive retries
 - **📁 State Machine** - Robust state tracking with rollback capabilities
 - **💾 Configuration Backup** - Automatic backup and restore of router configurations
-- **🧪 UART Pin Discovery** - Receive-only candidate-pair discovery for unknown Cisco UART headers
+- **🧪 UART Pin Discovery** - Receive-only candidate-pair discovery with auto-baud, session history, and pin map output
 - **✅ Cisco 4321 ISR Preflight** - Confirms expected console settings, serial ports, and Linux permissions
 - **🔎 Router Identity Check** - Best-effort model, serial, and IOS XE verification after manual connection
 - **🧭 Recovery Resume Warning** - Flags interrupted recoveries, especially after `confreg 0x2142`
@@ -277,7 +277,7 @@ CISCORESET/
 
 | Option | Function | Description |
 |--------|----------|-------------|
-| 1 | UART Pin Discovery | Receive-only GND/RX boot-output discovery before reset workflows |
+| 1 | UART Pin Discovery | Receive-only GND/RX boot-output discovery with auto-baud and pin map summary |
 | 2 | Guided Cisco 4321 ISR Reset | Step-by-step instructions with physical prompts and 4321 ISR preflight |
 | 3 | Connect to Cisco 4321 ISR | Manual connection with Cisco console settings check |
 | 4 | Password Reset Workflow | Automated password reset process |
@@ -389,11 +389,12 @@ General discovery loop:
 ```text
 1. Pick a likely Cisco ground pin.
 2. Keep adapter GND on that ground candidate.
-3. Move adapter RX to one Cisco candidate pin at a time.
-4. In option 1, select the cable type and enter labels for the ground/RX candidates.
-5. Select the baud rate to test, usually 9600 first and 115200 if 9600 is silent.
-6. Power cycle the router during the listen window.
-7. Check whether the tool detects readable Cisco boot text.
+3. Enter one or more RX candidate labels, separated by commas.
+4. In option 1, select the cable type and enter photo/orientation/wire-color notes.
+5. Select a single baud rate or enable auto-baud sweep.
+6. Confirm each attempt before listening.
+7. Power cycle the router during each listen window.
+8. Check the session summary for bytes captured, output classification, and pin map status.
 ```
 
 Pass condition:
@@ -409,6 +410,17 @@ Initializing
 
 If there is no readable output, keep the same ground candidate and move adapter RX to the next Cisco pin. If every RX candidate is silent, change the ground candidate and repeat.
 
+Output classifications:
+
+```text
+boot_text           readable Cisco boot text found
+readable_unknown    readable text or prompts, but no Cisco boot signature
+unreadable_output   bytes captured, but likely wrong baud/noise/inverted UART
+no_output           no bytes captured during the listen window
+connection_failed   serial port could not be opened
+skipped             attempt was skipped at the confirmation prompt
+```
+
 For the earlier suspected mapping, test exactly:
 
 ```text
@@ -420,7 +432,14 @@ Cisco Pin 4           -> empty
 
 If the yellow wire is the one plugged into adapter RX, yellow is the RX test wire. Do not connect red/orange or any adapter power lead to the Cisco header.
 
-Option 1 listens receive-only and saves boot output under `logs/uart_pin_discovery_*.log`, including the cable type, candidate labels, port, baud rate, timestamp, and safety note you entered.
+Option 1 listens receive-only and saves:
+
+```text
+logs/uart_pin_discovery_*.log               combined session log with metadata and captured output
+logs/uart_pin_discovery_*.log.session.json  machine-readable session history and pin map
+```
+
+After boot text is found, the tool can show a separate TX introduction checklist. Keep VCC/3V3/5V disconnected; the first TX test should be pressing Enter only.
 
 ### Quick System Inventory
 
