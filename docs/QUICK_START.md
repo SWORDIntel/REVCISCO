@@ -30,7 +30,7 @@ chmod +x src/bootstrap.py
 
 ### Basic Workflow
 
-1. **UART Pin Discovery**: Select option 1 for receive-only Pin 1/Pin 2 boot-output discovery.
+1. **UART Pin Discovery**: Select option 1 for receive-only candidate-pair boot-output discovery.
 2. **Guided Reset**: Select option 2 for the full Cisco 4321 ISR guided workflow.
 3. **Connect to Router**: Select option 3, confirm the 4321 ISR console settings, then choose your TTY port.
 4. **Password Reset**: Select option 4 if you are already connected.
@@ -45,24 +45,25 @@ The tool now shows a Cisco 4321 ISR preflight before connecting, checks router i
 
 Use option 1 before reset work when you are identifying the Cisco `UART_DEBUG` header.
 
-Correct first-test wiring:
+Assume a 6-pin USB-TTL adapter with `GND`, `RXD/RX`, `TXD/TX`, `VCC`, `CTS`, and `DTR`.
+
+Correct receive-only test wiring:
 
 ```text
-Adapter GND  -> Cisco Pin 1
-Adapter RX   -> Cisco Pin 2
+Adapter GND  -> one Cisco ground candidate
+Adapter RX   -> one Cisco TX-output candidate
 ```
 
 Everything else stays disconnected:
 
 ```text
 Adapter TX/VCC/CTS/DTR -> disconnected
-Cisco Pin 3            -> empty
-Cisco Pin 4            -> empty
+All other Cisco pins    -> empty
 ```
 
-With the current wire colors, use brown/tan from adapter GND on Cisco Pin 1. Use the adapter RX wire on Cisco Pin 2. If yellow is plugged into adapter RX, yellow goes to Cisco Pin 2. Remove red, orange, and any wire on Cisco Pin 3 or Pin 4.
+Test combinations one at a time: keep adapter GND on a likely ground, move adapter RX across candidate Cisco pins, power cycle during the listen window, and record the first pair that produces readable Cisco boot text.
 
-The pass condition is exactly: Pin 1 = brown/tan GND, Pin 2 = adapter RX wire, Pin 3 = empty, Pin 4 = empty.
+For the earlier suspected mapping, use brown/tan from adapter GND on Cisco Pin 1 and the adapter RX wire on Cisco Pin 2. If yellow is plugged into adapter RX, yellow is the RX test wire. Keep red, orange, adapter VCC, and every non-test Cisco pin disconnected.
 
 ## Testing
 

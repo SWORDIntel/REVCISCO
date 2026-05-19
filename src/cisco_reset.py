@@ -535,7 +535,7 @@ class CiscoReset:
             return False
 
     def run_uart_pin_discovery(self) -> bool:
-        """Receive-only listener to help identify UART_DEBUG GND/RX pins."""
+        """Receive-only listener to help identify candidate UART_DEBUG GND/RX pins."""
         port = self._select_port_for_pin_discovery()
         if not port:
             return False
@@ -582,6 +582,8 @@ class CiscoReset:
             ]
             detected = any(pattern.lower() in output.lower() for pattern in boot_patterns)
             result = {
+                "ground_label": settings.get("ground_label", "unknown"),
+                "rx_label": settings.get("rx_label", "unknown"),
                 "bytes_captured": len(output.encode("utf-8", errors="replace")),
                 "output_file": str(output_path),
                 "detected_boot_text": detected,

@@ -170,7 +170,7 @@ START
 - **🛡️ Multiple Retry Strategies** - Exponential backoff, linear, fixed delay, and adaptive retries
 - **📁 State Machine** - Robust state tracking with rollback capabilities
 - **💾 Configuration Backup** - Automatic backup and restore of router configurations
-- **🧪 UART Pin Discovery** - Receive-only Pin 1/Pin 2 discovery before any reset workflow
+- **🧪 UART Pin Discovery** - Receive-only candidate-pair discovery for unknown Cisco UART headers
 - **✅ Cisco 4321 ISR Preflight** - Confirms expected console settings, serial ports, and Linux permissions
 - **🔎 Router Identity Check** - Best-effort model, serial, and IOS XE verification after manual connection
 - **🧭 Recovery Resume Warning** - Flags interrupted recoveries, especially after `confreg 0x2142`
@@ -244,9 +244,10 @@ CISCORESET/
    ```
 
 2. **Select Option 1: UART Pin Discovery** before reset work if you are identifying pins.
-   - Connect only adapter GND and RX
+   - Use the 6-pin USB-TTL adapter in receive-only mode
+   - Connect only adapter GND and RX to one candidate pair at a time
    - Leave adapter TX, VCC, CTS, and DTR disconnected
-   - Leave Cisco Pin 3 and Pin 4 empty
+   - Leave every Cisco pin outside the current two-wire test empty
    - Power cycle the router and confirm boot text is captured
 
 3. **Select Option 2: Guided Cisco 4321 ISR Reset**
@@ -347,61 +348,74 @@ See [docs/INSTALL.md](docs/INSTALL.md) for detailed manual installation instruct
    - Saves configuration
 ```
 
-### UART Pin Discovery First Test
+### UART Pin Discovery Candidate Workflow
 
 Use this mode before any reset or transmit workflow when you are identifying the Cisco `UART_DEBUG` header.
 
-Only these two electrical connections should exist:
+Assumed adapter: a 6-pin USB-TTL serial interface with pins like:
 
 ```text
-Adapter GND  -> Cisco Pin 1
-Adapter RX   -> Cisco Pin 2
+GND
+RXD/RX
+TXD/TX
+VCC
+CTS
+DTR
 ```
 
-Everything else must be disconnected:
+Only these two electrical connections should exist during discovery:
 
 ```text
-Adapter TX   -> disconnected
-Adapter VCC  -> disconnected
-Adapter CTS  -> disconnected
-Adapter DTR  -> disconnected
-Cisco Pin 3  -> no wire
-Cisco Pin 4  -> no wire
+Adapter GND  -> one Cisco ground candidate
+Adapter RX   -> one Cisco TX-output candidate
 ```
 
-For the current color set:
+Everything else must be disconnected or floating:
 
 ```text
-Brown/tan wire on adapter GND -> Cisco Pin 1
-Wire on adapter RX            -> Cisco Pin 2
+Adapter TX
+Adapter VCC
+Adapter CTS
+Adapter DTR
+Every Cisco pin not in the current two-wire test
 ```
 
-If the yellow wire is the one plugged into adapter RX, use:
+General discovery loop:
 
 ```text
-Brown/tan -> Cisco Pin 1
-Yellow    -> Cisco Pin 2
+1. Pick a likely Cisco ground pin.
+2. Keep adapter GND on that ground candidate.
+3. Move adapter RX to one Cisco candidate pin at a time.
+4. In option 1, enter labels for the ground candidate and RX candidate.
+5. Power cycle the router during the listen window.
+6. Check whether the tool detects readable Cisco boot text.
 ```
 
-Remove or leave completely floating/disconnected:
+Pass condition:
 
 ```text
-Red
-Orange
-Any wire on Cisco Pin 3
-Any wire on Cisco Pin 4
+Readable output such as:
+System Bootstrap
+Cisco IOS
+Cisco IOS XE
+ROMMON
+Initializing
 ```
 
-The first test passes only when the Cisco header has exactly:
+If there is no readable output, keep the same ground candidate and move adapter RX to the next Cisco pin. If every RX candidate is silent, change the ground candidate and repeat.
+
+For the earlier suspected mapping, test exactly:
 
 ```text
-Pin 1 = brown/tan GND
-Pin 2 = adapter RX wire
-Pin 3 = empty
-Pin 4 = empty
+Brown/tan adapter GND -> Cisco Pin 1
+Adapter RX wire       -> Cisco Pin 2
+Cisco Pin 3           -> empty
+Cisco Pin 4           -> empty
 ```
 
-Option 1 listens receive-only and saves boot output under `logs/uart_pin_discovery_*.log`.
+If the yellow wire is the one plugged into adapter RX, yellow is the RX test wire. Do not connect red/orange or any adapter VCC lead to the Cisco header.
+
+Option 1 listens receive-only and saves boot output under `logs/uart_pin_discovery_*.log`, including the candidate labels you entered.
 
 ### Quick System Inventory
 

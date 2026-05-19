@@ -5,8 +5,9 @@
 ### Main Menu (15 Options)
 
 1. **UART Pin Discovery** ✅
-   - Receive-only wiring checklist for Pin 1 GND and Pin 2 RX
-   - Captures boot output without connecting adapter TX or VCC
+   - Receive-only candidate-pair checklist for unknown UART headers
+   - Assumes a 6-pin USB-TTL adapter and keeps TX, VCC, CTS, and DTR disconnected
+   - Captures boot output while labeling the tested ground and RX candidates
 
 2. **Guided Cisco 4321 ISR Reset** ✅
    - Full guided password reset workflow

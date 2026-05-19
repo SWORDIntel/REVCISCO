@@ -214,17 +214,24 @@ This tool will help you reset the password on your Cisco 4321 ISR router.
         permission = "OK" if in_dialout_group else "Needs attention"
         content = (
             "Use this before any reset workflow to identify Cisco UART_DEBUG pins safely.\n\n"
-            "Correct first-test wiring:\n"
-            "  Adapter GND  -> Cisco Pin 1\n"
-            "  Adapter RX   -> Cisco Pin 2\n\n"
+            "Assumed adapter: 6-pin USB-TTL serial interface with GND, RXD/RX, TXD/TX, VCC, CTS, DTR.\n\n"
+            "Receive-only discovery rule:\n"
+            "  Adapter GND -> one Cisco ground candidate\n"
+            "  Adapter RX  -> one Cisco transmit/TX-output candidate\n\n"
             "Everything else must be disconnected/floating:\n"
             "  Adapter TX, VCC, CTS, DTR\n"
-            "  Cisco Pin 3 and Cisco Pin 4\n\n"
-            "Colour mapping for the current harness:\n"
-            "  Brown/tan -> Cisco Pin 1 (GND)\n"
-            "  RX wire   -> Cisco Pin 2\n\n"
-            "Pass condition:\n"
-            "  Cisco header has exactly Pin 1 = GND, Pin 2 = RX, Pin 3 empty, Pin 4 empty.\n\n"
+            "  Every Cisco pin not in the current two-wire test\n\n"
+            "General candidate workflow:\n"
+            "  1. Identify or choose one likely Cisco GND pin.\n"
+            "  2. Keep adapter GND on that ground candidate.\n"
+            "  3. Move adapter RX across one Cisco pin at a time.\n"
+            "  4. Power cycle and listen after each candidate pair.\n"
+            "  5. A pass is readable boot text, such as System Bootstrap, Cisco IOS, ROMMON, or IOS XE.\n\n"
+            "If you are testing the earlier suspected mapping:\n"
+            "  Brown/tan adapter GND -> Cisco Pin 1\n"
+            "  Adapter RX wire       -> Cisco Pin 2\n"
+            "  Cisco Pin 3/Pin 4     -> empty\n\n"
+            "Do not connect adapter VCC to the Cisco header. Only add adapter TX after RX output is confirmed.\n\n"
             f"Listen baud rate: {baudrate}\n"
             f"Serial permission: {permission}\n"
             f"Detected ports:\n{port_text}"
@@ -241,25 +248,31 @@ This tool will help you reset the password on your Cisco 4321 ISR router.
                     ["Do not connect adapter TX or VCC", "Confirm dialout group access"]
                 )
                 return False
-            return self.confirm("Confirm only GND and RX are connected for receive-only discovery?", default=False)
+            return self.confirm("Confirm this is a two-wire receive-only test: adapter GND plus adapter RX only?", default=False)
 
         print("\nUART Pin Discovery")
         print("-" * 80)
         print(content)
         if not ports:
             return False
-        return self.confirm("Confirm only GND and RX are connected for receive-only discovery?", default=False)
+        return self.confirm("Confirm this is a two-wire receive-only test: adapter GND plus adapter RX only?", default=False)
 
     def show_uart_discovery_settings(self, default_log_file: str) -> Optional[Dict[str, Any]]:
         """Collect UART discovery listener settings."""
         if self.console:
+            ground_label = Prompt.ask("Cisco ground candidate label", default="unknown/selected GND candidate")
+            rx_label = Prompt.ask("Cisco RX-test candidate label", default="next candidate pin")
             duration = IntPrompt.ask("Listen duration in seconds", default=60)
             output_file = Prompt.ask("Save boot log to", default=default_log_file)
         else:
+            ground_label = input("Cisco ground candidate label [unknown/selected GND candidate]: ").strip() or "unknown/selected GND candidate"
+            rx_label = input("Cisco RX-test candidate label [next candidate pin]: ").strip() or "next candidate pin"
             duration = int(input("Listen duration in seconds [60]: ").strip() or "60")
             output_file = input(f"Save boot log to [{default_log_file}]: ").strip() or default_log_file
 
         return {
+            "ground_label": ground_label,
+            "rx_label": rx_label,
             "duration": float(duration),
             "output_file": output_file
         }
@@ -271,6 +284,8 @@ This tool will help you reset the password on your Cisco 4321 ISR router.
             sample = sample[-1200:]
         detected = result.get("detected_boot_text", False)
         content = (
+            f"Tested GND candidate: {result.get('ground_label', 'unknown')}\n"
+            f"Tested RX candidate: {result.get('rx_label', 'unknown')}\n"
             f"Captured: {result.get('bytes_captured', 0):,} bytes\n"
             f"Saved: {result.get('output_file', 'unknown')}\n"
             f"Likely Cisco boot text: {'yes' if detected else 'no'}\n\n"
@@ -281,7 +296,7 @@ This tool will help you reset the password on your Cisco 4321 ISR router.
         suggestions = []
         if detected:
             suggestions = [
-                "Pin 1/Pin 2 receive-only mapping is likely correct",
+                "Record this GND/RX candidate pair as the likely console output path",
                 "Keep VCC disconnected",
                 "Only add adapter TX later if you need interactive input"
             ]
@@ -290,7 +305,7 @@ This tool will help you reset the password on your Cisco 4321 ISR router.
                 "Power cycle the router while listening",
                 "Move adapter RX to the next candidate Cisco pin",
                 "Keep adapter TX and VCC disconnected",
-                "Confirm common ground on Pin 1"
+                "If every RX candidate is silent, re-check or change the ground candidate"
             ]
 
         if self.console:
