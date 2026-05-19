@@ -582,6 +582,7 @@ class CiscoReset:
             ]
             detected = any(pattern.lower() in output.lower() for pattern in boot_patterns)
             result = {
+                "cable_type": settings.get("cable_type", "unknown"),
                 "ground_label": settings.get("ground_label", "unknown"),
                 "rx_label": settings.get("rx_label", "unknown"),
                 "bytes_captured": len(output.encode("utf-8", errors="replace")),

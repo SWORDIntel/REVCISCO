@@ -214,13 +214,24 @@ This tool will help you reset the password on your Cisco 4321 ISR router.
         permission = "OK" if in_dialout_group else "Needs attention"
         content = (
             "Use this before any reset workflow to identify Cisco UART_DEBUG pins safely.\n\n"
-            "Assumed adapter: 6-pin USB-TTL serial interface with GND, RXD/RX, TXD/TX, VCC, CTS, DTR.\n\n"
+            "Supported cable styles:\n"
+            "  - 6-pin USB-TTL board: GND, RXD/RX, TXD/TX, VCC, CTS, DTR\n"
+            "  - 4/5-pin USB-TTL lead: GND, RX, TX, VCC, optional 3V3/5V\n"
+            "  - 3-wire UART lead: GND, RX, TX\n"
+            "  - Keyed JST/Dupont harness: verify labels; wire colors are not authoritative\n"
+            "  - RJ45/rollover Cisco console cable: use the normal console port, not UART_DEBUG probing\n"
+            "  - DB9/RS-232 adapter: do not connect directly to TTL UART_DEBUG pins\n\n"
             "Receive-only discovery rule:\n"
             "  Adapter GND -> one Cisco ground candidate\n"
             "  Adapter RX  -> one Cisco transmit/TX-output candidate\n\n"
             "Everything else must be disconnected/floating:\n"
-            "  Adapter TX, VCC, CTS, DTR\n"
+            "  Adapter TX, VCC/3V3/5V, CTS, DTR, RTS\n"
             "  Every Cisco pin not in the current two-wire test\n\n"
+            "Cable-specific cautions:\n"
+            "  - RX/TX labels are from the adapter's perspective; adapter RX listens to Cisco TX.\n"
+            "  - Never use the adapter power pin while probing router UART headers.\n"
+            "  - If the cable exposes 3V3 and 5V, leave both disconnected.\n"
+            "  - If your cable is DB9/RS-232 level, use a TTL-level adapter instead.\n\n"
             "General candidate workflow:\n"
             "  1. Identify or choose one likely Cisco GND pin.\n"
             "  2. Keep adapter GND on that ground candidate.\n"
@@ -245,7 +256,7 @@ This tool will help you reset the password on your Cisco 4321 ISR router.
                 self.show_error_dialog(
                     "No Serial Port Detected",
                     "Connect the USB UART adapter and check /dev/ttyUSB*, /dev/ttyACM*, or /dev/ttyS*.",
-                    ["Do not connect adapter TX or VCC", "Confirm dialout group access"]
+                    ["Do not connect adapter TX or power pins", "Confirm dialout group access"]
                 )
                 return False
             return self.confirm("Confirm this is a two-wire receive-only test: adapter GND plus adapter RX only?", default=False)
@@ -259,18 +270,49 @@ This tool will help you reset the password on your Cisco 4321 ISR router.
 
     def show_uart_discovery_settings(self, default_log_file: str) -> Optional[Dict[str, Any]]:
         """Collect UART discovery listener settings."""
+        cable_types = {
+            "1": "6-pin USB-TTL board (GND/RX/TX/VCC/CTS/DTR)",
+            "2": "4/5-pin USB-TTL lead (GND/RX/TX/VCC[/3V3/5V])",
+            "3": "3-wire UART lead (GND/RX/TX)",
+            "4": "Keyed JST/Dupont harness",
+            "5": "RJ45/rollover Cisco console cable",
+            "6": "DB9/RS-232 adapter",
+            "7": "Other/unknown cable"
+        }
+
         if self.console:
+            cable_menu = "\n".join(f"{key}. {label}" for key, label in cable_types.items())
+            self.show_info_panel("Connected Cable Type", cable_menu)
+            cable_choice = Prompt.ask(
+                "Connected cable type",
+                choices=list(cable_types.keys()),
+                default="1",
+                show_choices=False
+            )
+            cable_note = cable_types[cable_choice]
+            if cable_choice == "5":
+                cable_note += "\nUse this with the normal Cisco console port. Do not use RJ45 rollover wiring for board-level UART_DEBUG pin probing."
+            elif cable_choice == "6":
+                cable_note += "\nDB9/RS-232 voltage levels are not TTL-safe. Use a TTL-level USB adapter for UART_DEBUG headers."
+            self.show_info_panel("Selected Cable", cable_note)
             ground_label = Prompt.ask("Cisco ground candidate label", default="unknown/selected GND candidate")
             rx_label = Prompt.ask("Cisco RX-test candidate label", default="next candidate pin")
             duration = IntPrompt.ask("Listen duration in seconds", default=60)
             output_file = Prompt.ask("Save boot log to", default=default_log_file)
         else:
+            print("\nConnected cable type:")
+            for key, label in cable_types.items():
+                print(f"{key}. {label}")
+            cable_choice = input("Cable type [1]: ").strip() or "1"
+            if cable_choice not in cable_types:
+                cable_choice = "7"
             ground_label = input("Cisco ground candidate label [unknown/selected GND candidate]: ").strip() or "unknown/selected GND candidate"
             rx_label = input("Cisco RX-test candidate label [next candidate pin]: ").strip() or "next candidate pin"
             duration = int(input("Listen duration in seconds [60]: ").strip() or "60")
             output_file = input(f"Save boot log to [{default_log_file}]: ").strip() or default_log_file
 
         return {
+            "cable_type": cable_types[cable_choice],
             "ground_label": ground_label,
             "rx_label": rx_label,
             "duration": float(duration),
@@ -284,6 +326,7 @@ This tool will help you reset the password on your Cisco 4321 ISR router.
             sample = sample[-1200:]
         detected = result.get("detected_boot_text", False)
         content = (
+            f"Cable type: {result.get('cable_type', 'unknown')}\n"
             f"Tested GND candidate: {result.get('ground_label', 'unknown')}\n"
             f"Tested RX candidate: {result.get('rx_label', 'unknown')}\n"
             f"Captured: {result.get('bytes_captured', 0):,} bytes\n"
@@ -297,14 +340,14 @@ This tool will help you reset the password on your Cisco 4321 ISR router.
         if detected:
             suggestions = [
                 "Record this GND/RX candidate pair as the likely console output path",
-                "Keep VCC disconnected",
+                "Keep adapter power pins disconnected",
                 "Only add adapter TX later if you need interactive input"
             ]
         else:
             suggestions = [
                 "Power cycle the router while listening",
                 "Move adapter RX to the next candidate Cisco pin",
-                "Keep adapter TX and VCC disconnected",
+                "Keep adapter TX and all power/control pins disconnected",
                 "If every RX candidate is silent, re-check or change the ground candidate"
             ]
 

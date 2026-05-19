@@ -244,9 +244,9 @@ CISCORESET/
    ```
 
 2. **Select Option 1: UART Pin Discovery** before reset work if you are identifying pins.
-   - Use the 6-pin USB-TTL adapter in receive-only mode
+   - Select the connected cable style in the discovery prompts
    - Connect only adapter GND and RX to one candidate pair at a time
-   - Leave adapter TX, VCC, CTS, and DTR disconnected
+   - Leave adapter TX, VCC/3V3/5V, CTS, DTR, and RTS disconnected
    - Leave every Cisco pin outside the current two-wire test empty
    - Power cycle the router and confirm boot text is captured
 
@@ -352,15 +352,15 @@ See [docs/INSTALL.md](docs/INSTALL.md) for detailed manual installation instruct
 
 Use this mode before any reset or transmit workflow when you are identifying the Cisco `UART_DEBUG` header.
 
-Assumed adapter: a 6-pin USB-TTL serial interface with pins like:
+Discovery mode supports several common cable styles:
 
 ```text
-GND
-RXD/RX
-TXD/TX
-VCC
-CTS
-DTR
+6-pin USB-TTL board:        GND, RXD/RX, TXD/TX, VCC, CTS, DTR
+4/5-pin USB-TTL lead:       GND, RX, TX, VCC, optional 3V3/5V
+3-wire UART lead:           GND, RX, TX
+Keyed JST/Dupont harness:   label-dependent; colors are not authoritative
+RJ45/rollover console:      for the normal Cisco console port, not UART_DEBUG probing
+DB9/RS-232 adapter:         not safe to connect directly to TTL UART_DEBUG pins
 ```
 
 Only these two electrical connections should exist during discovery:
@@ -375,10 +375,14 @@ Everything else must be disconnected or floating:
 ```text
 Adapter TX
 Adapter VCC
+Adapter 3V3/5V
 Adapter CTS
 Adapter DTR
+Adapter RTS
 Every Cisco pin not in the current two-wire test
 ```
+
+RX/TX labels are from the adapter's perspective. The adapter `RX` pin listens to the Cisco pin that transmits boot output. Do not trust wire color alone; use printed pin labels or continuity checks where possible.
 
 General discovery loop:
 
@@ -386,7 +390,7 @@ General discovery loop:
 1. Pick a likely Cisco ground pin.
 2. Keep adapter GND on that ground candidate.
 3. Move adapter RX to one Cisco candidate pin at a time.
-4. In option 1, enter labels for the ground candidate and RX candidate.
+4. In option 1, select the cable type and enter labels for the ground/RX candidates.
 5. Power cycle the router during the listen window.
 6. Check whether the tool detects readable Cisco boot text.
 ```
@@ -413,9 +417,9 @@ Cisco Pin 3           -> empty
 Cisco Pin 4           -> empty
 ```
 
-If the yellow wire is the one plugged into adapter RX, yellow is the RX test wire. Do not connect red/orange or any adapter VCC lead to the Cisco header.
+If the yellow wire is the one plugged into adapter RX, yellow is the RX test wire. Do not connect red/orange or any adapter power lead to the Cisco header.
 
-Option 1 listens receive-only and saves boot output under `logs/uart_pin_discovery_*.log`, including the candidate labels you entered.
+Option 1 listens receive-only and saves boot output under `logs/uart_pin_discovery_*.log`, including the cable type and candidate labels you entered.
 
 ### Quick System Inventory
 

@@ -8,8 +8,9 @@ All major workflows are reachable from the TUI. The current main menu has 15 opt
 
 1. **UART Pin Discovery**
    - Receive-only candidate-pair wiring checklist
-   - Assumes a 6-pin USB-TTL adapter and keeps TX, VCC, CTS, and DTR disconnected
-   - Captures boot output while labeling the tested ground and RX candidates
+   - Handles 6-pin USB-TTL boards, 4/5-pin leads, 3-wire UART leads, keyed harnesses, RJ45 console cables, DB9/RS-232 adapters, and unknown cable types
+   - Keeps TX, power, CTS, DTR, and RTS disconnected during receive-only probing
+   - Captures boot output while labeling the cable type and tested ground/RX candidates
    - Saves discovery logs under `logs/uart_pin_discovery_*.log`
 
 2. **Guided Cisco 4321 ISR Reset**

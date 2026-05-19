@@ -45,7 +45,7 @@ The tool now shows a Cisco 4321 ISR preflight before connecting, checks router i
 
 Use option 1 before reset work when you are identifying the Cisco `UART_DEBUG` header.
 
-Assume a 6-pin USB-TTL adapter with `GND`, `RXD/RX`, `TXD/TX`, `VCC`, `CTS`, and `DTR`.
+Discovery mode supports common cable styles including 6-pin USB-TTL boards, 4/5-pin USB-TTL leads, 3-wire UART leads, keyed JST/Dupont harnesses, RJ45/rollover console cables, and DB9/RS-232 adapters.
 
 Correct receive-only test wiring:
 
@@ -57,13 +57,13 @@ Adapter RX   -> one Cisco TX-output candidate
 Everything else stays disconnected:
 
 ```text
-Adapter TX/VCC/CTS/DTR -> disconnected
-All other Cisco pins    -> empty
+Adapter TX/VCC/3V3/5V/CTS/DTR/RTS -> disconnected
+All other Cisco pins              -> empty
 ```
 
-Test combinations one at a time: keep adapter GND on a likely ground, move adapter RX across candidate Cisco pins, power cycle during the listen window, and record the first pair that produces readable Cisco boot text.
+Test combinations one at a time: select the cable type in option 1, keep adapter GND on a likely ground, move adapter RX across candidate Cisco pins, power cycle during the listen window, and record the first pair that produces readable Cisco boot text. RX/TX labels are from the adapter's perspective, so adapter RX listens to Cisco TX output.
 
-For the earlier suspected mapping, use brown/tan from adapter GND on Cisco Pin 1 and the adapter RX wire on Cisco Pin 2. If yellow is plugged into adapter RX, yellow is the RX test wire. Keep red, orange, adapter VCC, and every non-test Cisco pin disconnected.
+For the earlier suspected mapping, use brown/tan from adapter GND on Cisco Pin 1 and the adapter RX wire on Cisco Pin 2. If yellow is plugged into adapter RX, yellow is the RX test wire. Keep red, orange, adapter power pins, and every non-test Cisco pin disconnected.
 
 ## Testing
 
