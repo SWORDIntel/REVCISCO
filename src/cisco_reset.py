@@ -546,14 +546,15 @@ class CiscoReset:
         settings = self.tui.show_uart_discovery_settings(default_log)
         if not settings:
             return False
+        baudrate = int(settings.get("baudrate", self._default_baudrate()))
 
         discovery_conn = SerialConnection(
             port=port,
-            baudrate=self._default_baudrate(),
+            baudrate=baudrate,
             logger=self.log_monitor.logger,
             metrics=self.log_monitor.metrics
         )
-        if not discovery_conn.open(port, self._default_baudrate()):
+        if not discovery_conn.open(port, baudrate):
             self.tui.show_error_dialog(
                 "Discovery Connection Failed",
                 f"Could not open {port}",
@@ -563,13 +564,23 @@ class CiscoReset:
 
         try:
             self.tui.show_status(
-                "Listening receive-only. Power cycle the Cisco 4321 ISR now and watch for boot text.",
+                f"Listening receive-only at {baudrate} baud. Power cycle the Cisco 4321 ISR now and watch for boot text.",
                 "warning"
             )
             output = discovery_conn.read_output(settings["duration"])
             output_path = Path(settings["output_file"]).expanduser()
             output_path.parent.mkdir(parents=True, exist_ok=True)
             with open(output_path, "w", encoding="utf-8", errors="replace") as f:
+                f.write("# UART Pin Discovery Log\n")
+                f.write(f"# Timestamp: {datetime.now().isoformat(timespec='seconds')}\n")
+                f.write(f"# Port: {port}\n")
+                f.write(f"# Baud rate: {baudrate}\n")
+                f.write(f"# Cable type: {settings.get('cable_type', 'unknown')}\n")
+                f.write(f"# Cable note: {settings.get('cable_note', 'unknown')}\n")
+                f.write(f"# Cisco ground candidate: {settings.get('ground_label', 'unknown')}\n")
+                f.write(f"# Cisco RX-test candidate: {settings.get('rx_label', 'unknown')}\n")
+                f.write("# Wiring rule: adapter GND plus adapter RX only; TX/power/control pins disconnected.\n")
+                f.write("# --- captured output follows ---\n")
                 f.write(output)
 
             boot_patterns = [
@@ -585,6 +596,7 @@ class CiscoReset:
                 "cable_type": settings.get("cable_type", "unknown"),
                 "ground_label": settings.get("ground_label", "unknown"),
                 "rx_label": settings.get("rx_label", "unknown"),
+                "baudrate": baudrate,
                 "bytes_captured": len(output.encode("utf-8", errors="replace")),
                 "output_file": str(output_path),
                 "detected_boot_text": detected,

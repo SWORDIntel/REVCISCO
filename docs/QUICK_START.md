@@ -61,7 +61,7 @@ Adapter TX/VCC/3V3/5V/CTS/DTR/RTS -> disconnected
 All other Cisco pins              -> empty
 ```
 
-Test combinations one at a time: select the cable type in option 1, keep adapter GND on a likely ground, move adapter RX across candidate Cisco pins, power cycle during the listen window, and record the first pair that produces readable Cisco boot text. RX/TX labels are from the adapter's perspective, so adapter RX listens to Cisco TX output.
+Test combinations one at a time: select the cable type in option 1, keep adapter GND on a likely ground, move adapter RX across candidate Cisco pins, select the baud rate to test, power cycle during the listen window, and record the first pair that produces readable Cisco boot text. Try 9600 first, then 115200 if 9600 is silent. RX/TX labels are from the adapter's perspective, so adapter RX listens to Cisco TX output.
 
 For the earlier suspected mapping, use brown/tan from adapter GND on Cisco Pin 1 and the adapter RX wire on Cisco Pin 2. If yellow is plugged into adapter RX, yellow is the RX test wire. Keep red, orange, adapter power pins, and every non-test Cisco pin disconnected.
 

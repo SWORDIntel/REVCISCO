@@ -271,17 +271,39 @@ This tool will help you reset the password on your Cisco 4321 ISR router.
     def show_uart_discovery_settings(self, default_log_file: str) -> Optional[Dict[str, Any]]:
         """Collect UART discovery listener settings."""
         cable_types = {
-            "1": "6-pin USB-TTL board (GND/RX/TX/VCC/CTS/DTR)",
-            "2": "4/5-pin USB-TTL lead (GND/RX/TX/VCC[/3V3/5V])",
-            "3": "3-wire UART lead (GND/RX/TX)",
-            "4": "Keyed JST/Dupont harness",
-            "5": "RJ45/rollover Cisco console cable",
-            "6": "DB9/RS-232 adapter",
-            "7": "Other/unknown cable"
+            "1": {
+                "label": "6-pin USB-TTL board (GND/RX/TX/VCC/CTS/DTR)",
+                "note": "Use only GND and RX. Leave VCC, TX, CTS, and DTR disconnected."
+            },
+            "2": {
+                "label": "4/5-pin USB-TTL lead (GND/RX/TX/VCC[/3V3/5V])",
+                "note": "Use only GND and RX. Leave TX and all power pins disconnected."
+            },
+            "3": {
+                "label": "3-wire UART lead (GND/RX/TX)",
+                "note": "Use only GND and RX for discovery. Leave TX disconnected until output is confirmed."
+            },
+            "4": {
+                "label": "Keyed JST/Dupont harness",
+                "note": "Verify printed labels or continuity. Wire color alone is not enough."
+            },
+            "5": {
+                "label": "RJ45/rollover Cisco console cable",
+                "note": "Use this with the normal Cisco console port. Do not use RJ45 rollover wiring for board-level UART_DEBUG pin probing."
+            },
+            "6": {
+                "label": "DB9/RS-232 adapter",
+                "note": "DB9/RS-232 voltage levels are not TTL-safe. Use a TTL-level USB adapter for UART_DEBUG headers."
+            },
+            "7": {
+                "label": "Other/unknown cable",
+                "note": "Treat all non-GND/RX conductors as unsafe until identified."
+            }
         }
+        baud_presets = ["9600", "115200", "57600", "38400", "19200", "4800", "1200", "custom"]
 
         if self.console:
-            cable_menu = "\n".join(f"{key}. {label}" for key, label in cable_types.items())
+            cable_menu = "\n".join(f"{key}. {info['label']}" for key, info in cable_types.items())
             self.show_info_panel("Connected Cable Type", cable_menu)
             cable_choice = Prompt.ask(
                 "Connected cable type",
@@ -289,32 +311,46 @@ This tool will help you reset the password on your Cisco 4321 ISR router.
                 default="1",
                 show_choices=False
             )
-            cable_note = cable_types[cable_choice]
-            if cable_choice == "5":
-                cable_note += "\nUse this with the normal Cisco console port. Do not use RJ45 rollover wiring for board-level UART_DEBUG pin probing."
-            elif cable_choice == "6":
-                cable_note += "\nDB9/RS-232 voltage levels are not TTL-safe. Use a TTL-level USB adapter for UART_DEBUG headers."
-            self.show_info_panel("Selected Cable", cable_note)
+            self.show_info_panel(
+                "Selected Cable",
+                f"{cable_types[cable_choice]['label']}\n{cable_types[cable_choice]['note']}"
+            )
             ground_label = Prompt.ask("Cisco ground candidate label", default="unknown/selected GND candidate")
             rx_label = Prompt.ask("Cisco RX-test candidate label", default="next candidate pin")
+            baud_choice = Prompt.ask(
+                "Discovery baud rate",
+                choices=baud_presets,
+                default="9600",
+                show_choices=False
+            )
+            baudrate = IntPrompt.ask("Custom baud rate", default=9600) if baud_choice == "custom" else int(baud_choice)
             duration = IntPrompt.ask("Listen duration in seconds", default=60)
             output_file = Prompt.ask("Save boot log to", default=default_log_file)
         else:
             print("\nConnected cable type:")
-            for key, label in cable_types.items():
-                print(f"{key}. {label}")
+            for key, info in cable_types.items():
+                print(f"{key}. {info['label']}")
             cable_choice = input("Cable type [1]: ").strip() or "1"
             if cable_choice not in cable_types:
                 cable_choice = "7"
+            print(f"Selected: {cable_types[cable_choice]['label']}")
+            print(cable_types[cable_choice]["note"])
             ground_label = input("Cisco ground candidate label [unknown/selected GND candidate]: ").strip() or "unknown/selected GND candidate"
             rx_label = input("Cisco RX-test candidate label [next candidate pin]: ").strip() or "next candidate pin"
+            baud_choice = input("Discovery baud rate [9600, 115200, 57600, 38400, 19200, 4800, 1200, custom] [9600]: ").strip() or "9600"
+            if baud_choice == "custom":
+                baudrate = int(input("Custom baud rate [9600]: ").strip() or "9600")
+            else:
+                baudrate = int(baud_choice) if baud_choice.isdigit() else 9600
             duration = int(input("Listen duration in seconds [60]: ").strip() or "60")
             output_file = input(f"Save boot log to [{default_log_file}]: ").strip() or default_log_file
 
         return {
-            "cable_type": cable_types[cable_choice],
+            "cable_type": cable_types[cable_choice]["label"],
+            "cable_note": cable_types[cable_choice]["note"],
             "ground_label": ground_label,
             "rx_label": rx_label,
+            "baudrate": baudrate,
             "duration": float(duration),
             "output_file": output_file
         }
@@ -329,6 +365,7 @@ This tool will help you reset the password on your Cisco 4321 ISR router.
             f"Cable type: {result.get('cable_type', 'unknown')}\n"
             f"Tested GND candidate: {result.get('ground_label', 'unknown')}\n"
             f"Tested RX candidate: {result.get('rx_label', 'unknown')}\n"
+            f"Baud rate: {result.get('baudrate', 'unknown')}\n"
             f"Captured: {result.get('bytes_captured', 0):,} bytes\n"
             f"Saved: {result.get('output_file', 'unknown')}\n"
             f"Likely Cisco boot text: {'yes' if detected else 'no'}\n\n"

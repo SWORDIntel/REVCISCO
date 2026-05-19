@@ -391,8 +391,9 @@ General discovery loop:
 2. Keep adapter GND on that ground candidate.
 3. Move adapter RX to one Cisco candidate pin at a time.
 4. In option 1, select the cable type and enter labels for the ground/RX candidates.
-5. Power cycle the router during the listen window.
-6. Check whether the tool detects readable Cisco boot text.
+5. Select the baud rate to test, usually 9600 first and 115200 if 9600 is silent.
+6. Power cycle the router during the listen window.
+7. Check whether the tool detects readable Cisco boot text.
 ```
 
 Pass condition:
@@ -419,7 +420,7 @@ Cisco Pin 4           -> empty
 
 If the yellow wire is the one plugged into adapter RX, yellow is the RX test wire. Do not connect red/orange or any adapter power lead to the Cisco header.
 
-Option 1 listens receive-only and saves boot output under `logs/uart_pin_discovery_*.log`, including the cable type and candidate labels you entered.
+Option 1 listens receive-only and saves boot output under `logs/uart_pin_discovery_*.log`, including the cable type, candidate labels, port, baud rate, timestamp, and safety note you entered.
 
 ### Quick System Inventory
 
