@@ -10,7 +10,7 @@ import queue
 import os
 import sys
 from pathlib import Path
-from typing import Optional, List, Callable, Any
+from typing import Optional, List, Callable, Any, Dict
 import fcntl
 import termios
 import struct
@@ -171,6 +171,20 @@ class SerialConnection:
                     self.logger.warning(f"Error closing port: {e}")
         
         self.serial_port = None
+
+    def pause_reader(self):
+        """Pause background text reader for exclusive binary operations."""
+        self.reading_active = False
+        if self.read_thread and self.read_thread.is_alive():
+            self.read_thread.join(timeout=2.0)
+        self.read_thread = None
+
+    def resume_reader(self):
+        """Resume background text reader after exclusive binary operations."""
+        if self.serial_port and self.serial_port.is_open and not self.reading_active:
+            self.reading_active = True
+            self.read_thread = threading.Thread(target=self._read_loop, daemon=True)
+            self.read_thread.start()
     
     def _read_loop(self):
         """Background thread to continuously read from serial port"""
@@ -398,3 +412,87 @@ class SerialConnection:
             self.serial_port.reset_input_buffer()
             self.serial_port.reset_output_buffer()
             self.clear_output_buffer()
+
+    def dump_raw_to_file(self, output_file: str, expected_size: Optional[int] = None,
+                         timeout: float = 3600.0, idle_timeout: float = 10.0,
+                         chunk_size: int = 4096,
+                         progress_callback: Optional[Callable[[Dict[str, Any]], None]] = None) -> Dict[str, Any]:
+        """
+        Capture raw UART bytes to a file.
+
+        Stops when expected_size bytes are captured, idle_timeout passes without data,
+        or timeout is reached. The background text reader is paused so binary bytes are
+        not decoded or consumed before they are written.
+        """
+        if not self.serial_port or not self.serial_port.is_open:
+            raise RuntimeError("Serial port not open")
+
+        output_path = Path(output_file)
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+
+        was_reading = self.reading_active
+        self.pause_reader()
+        self.clear_output_buffer()
+        try:
+            self.serial_port.reset_input_buffer()
+        except Exception:
+            pass
+
+        start_time = time.time()
+        last_data_time = start_time
+        bytes_written = 0
+
+        try:
+            with open(output_path, "wb") as f:
+                while True:
+                    now = time.time()
+                    if expected_size is not None and bytes_written >= expected_size:
+                        reason = "expected_size"
+                        break
+                    if now - start_time >= timeout:
+                        reason = "timeout"
+                        break
+                    if now - last_data_time >= idle_timeout:
+                        reason = "idle_timeout"
+                        break
+
+                    waiting = self.serial_port.in_waiting
+                    if waiting:
+                        to_read = min(waiting, chunk_size)
+                        if expected_size is not None:
+                            to_read = min(to_read, expected_size - bytes_written)
+                        data = self.serial_port.read(to_read)
+                        if data:
+                            f.write(data)
+                            bytes_written += len(data)
+                            last_data_time = time.time()
+                            if self.metrics:
+                                self.metrics.record_bytes(received=len(data))
+                            if progress_callback:
+                                progress_callback({
+                                    "bytes_written": bytes_written,
+                                    "expected_size": expected_size,
+                                    "elapsed": last_data_time - start_time,
+                                    "output_file": str(output_path)
+                                })
+                        continue
+
+                    time.sleep(0.05)
+
+            duration = time.time() - start_time
+            result = {
+                "output_file": str(output_path),
+                "bytes_written": bytes_written,
+                "duration": duration,
+                "reason": reason,
+                "expected_size": expected_size
+            }
+            if self.logger:
+                self.logger.info(
+                    f"Raw UART dump captured {bytes_written} bytes to {output_path} "
+                    f"({reason}, {duration:.1f}s)"
+                )
+            return result
+        finally:
+            if was_reading:
+                self.resume_reader()

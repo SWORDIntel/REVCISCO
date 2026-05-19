@@ -19,6 +19,9 @@ monitoring/*.json
 # Backups
 backups/*.txt
 
+# Firmware dumps
+firmware_dumps/
+
 # IDE
 .vscode/
 .idea/
@@ -31,3 +34,4 @@ Thumbs.db
 
 # Generated
 activate.sh
+config/*.json

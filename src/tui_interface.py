@@ -151,17 +151,21 @@ This tool will help you reset the password on your Cisco 4321 ISR router.
             menu_table.add_column(style="white")
             
             menu_items = [
-                ("1", "Connect to Router"),
-                ("2", "Password Reset Workflow"),
-                ("3", "System Detection/Inventory"),
-                ("4", "Interactive Command Mode"),
-                ("5", "View Logs"),
-                ("6", "Settings"),
-                ("7", "Exit"),
-                ("8", "View Metrics"),
-                ("9", "Configuration Backup/Restore"),
-                ("10", "Individual Detection Options"),
-                ("11", "Advanced Password Reset")
+                ("1", "UART Pin Discovery"),
+                ("2", "Guided Cisco 4321 ISR Reset"),
+                ("3", "Connect to Cisco 4321 ISR"),
+                ("4", "Password Reset Workflow"),
+                ("5", "System Detection/Inventory"),
+                ("6", "Interactive Command Mode"),
+                ("7", "View Logs"),
+                ("8", "Settings"),
+                ("9", "Exit"),
+                ("10", "View Metrics"),
+                ("11", "Configuration Backup/Restore"),
+                ("12", "Individual Detection Options"),
+                ("13", "Advanced Password Reset"),
+                ("14", "UART Firmware Dump"),
+                ("15", "Decompress Firmware Dump")
             ]
             
             for num, desc in menu_items:
@@ -178,27 +182,767 @@ This tool will help you reset the password on your Cisco 4321 ISR router.
             
             choice = Prompt.ask(
                 "[bold cyan]Select option[/bold cyan]",
-                choices=["1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12"],
+                choices=["1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15"],
                 default="1"
             )
         else:
             print(f"\nConnection Status: {connection_status}")
             print("\nMain Menu:")
-            print("1. Guided Workflow (Step-by-Step)")
-            print("2. Connect to Router")
-            print("3. Password Reset Workflow")
-            print("4. System Detection/Inventory")
-            print("5. Interactive Command Mode")
-            print("6. View Logs")
-            print("7. Settings")
-            print("8. Exit")
-            print("9. View Metrics")
-            print("10. Configuration Backup/Restore")
-            print("11. Individual Detection Options")
-            print("12. Advanced Password Reset")
-            choice = input("\nSelect option [1-12]: ").strip() or "1"
+            print("1. UART Pin Discovery")
+            print("2. Guided Cisco 4321 ISR Reset")
+            print("3. Connect to Cisco 4321 ISR")
+            print("4. Password Reset Workflow")
+            print("5. System Detection/Inventory")
+            print("6. Interactive Command Mode")
+            print("7. View Logs")
+            print("8. Settings")
+            print("9. Exit")
+            print("10. View Metrics")
+            print("11. Configuration Backup/Restore")
+            print("12. Individual Detection Options")
+            print("13. Advanced Password Reset")
+            print("14. UART Firmware Dump")
+            print("15. Decompress Firmware Dump")
+            choice = input("\nSelect option [1-15]: ").strip() or "1"
         
         return choice
+
+    def show_uart_pin_discovery_intro(self, ports: list, baudrate: int = 9600,
+                                      in_dialout_group: bool = False) -> bool:
+        """Show receive-only UART pin discovery safety checklist."""
+        port_text = "\n".join(f"  - {port}" for port in ports) if ports else "  - No serial ports detected"
+        permission = "OK" if in_dialout_group else "Needs attention"
+        content = (
+            "Use this before any reset workflow to identify Cisco UART_DEBUG pins safely.\n\n"
+            "Primary setup for this project:\n"
+            "  FT232RL adapter header order: DTR RXI TXO VCC CTS GND\n"
+            "  Cisco target: 4-pin UART_DEBUG candidate header\n"
+            "  First goal: find Cisco GND and Cisco TX/output with FT232RL GND+RXI\n"
+            "  Second goal: record/verify Cisco RX/input with FT232RL TXO after RXI works\n\n"
+            "Cisco 4-pin header orientation, using the fan as reference:\n"
+            "\n"
+            "      Cisco 4321 ISR board, cover removed\n"
+            "  +------------------------------------------------+\n"
+            "  |                                                |\n"
+            "  |   [ FAN / BLOWER ]                             |\n"
+            "  |       || airflow/reference side                |\n"
+            "  |       \\/                                       |\n"
+            "  |                                                |\n"
+            "  |        UART_DEBUG candidate header             |\n"
+            "  |        fan side ->  +---+ +---+ +---+ +---+  |\n"
+            "  |                     | 1 | | 2 | | 3 | | 4 |  |\n"
+            "  |                     +---+ +---+ +---+ +---+  |\n"
+            "  |                                                |\n"
+            "  +------------------------------------------------+\n"
+            "\n"
+            "  Default assumption: Pin 1 is nearest the fan/reference side.\n"
+            "  If your photo/header is rotated, relabel the candidates in the prompts.\n\n"
+            "Supported cable styles:\n"
+            "  - FT232RL 6-pin header: DTR, RXI, TXO, VCC, CTS, GND\n"
+            "  - 6-pin USB-TTL board: GND, RXD/RX, TXD/TX, VCC, CTS, DTR\n"
+            "  - 4/5-pin USB-TTL lead: GND, RX, TX, VCC, optional 3V3/5V\n"
+            "  - 3-wire UART lead: GND, RX, TX\n"
+            "  - Keyed JST/Dupont harness: verify labels; wire colors are not authoritative\n"
+            "  - RJ45/rollover Cisco console cable: use the normal console port, not UART_DEBUG probing\n"
+            "  - DB9/RS-232 adapter: do not connect directly to TTL UART_DEBUG pins\n\n"
+            "Receive-only discovery rule:\n"
+            "  Adapter GND -> one Cisco ground candidate\n"
+            "  FT232RL RXI -> one Cisco transmit/TX-output candidate\n\n"
+            "FT232RL signal meaning:\n"
+            "  RXI listens to the router. Connect RXI to a suspected Cisco TX/output pin.\n"
+            "  TXO talks to the router. Connect TXO only after RXI has confirmed readable output.\n"
+            "  VCC must stay disconnected from the Cisco UART_DEBUG header.\n\n"
+            "Everything else must be disconnected/floating:\n"
+            "  Adapter TX, VCC/3V3/5V, CTS, DTR, RTS\n"
+            "  Every Cisco pin not in the current two-wire test\n\n"
+            "Cable-specific cautions:\n"
+            "  - RX/TX labels are from the adapter's perspective; adapter RX listens to Cisco TX.\n"
+            "  - Never use the adapter power pin while probing router UART headers.\n"
+            "  - If the cable exposes 3V3 and 5V, leave both disconnected.\n"
+            "  - If your cable is DB9/RS-232 level, use a TTL-level adapter instead.\n\n"
+            "General candidate workflow:\n"
+            "  1. Identify or choose one likely Cisco GND pin.\n"
+            "  2. Keep adapter GND on that ground candidate.\n"
+            "  3. Move FT232RL RXI across one Cisco pin at a time.\n"
+            "  4. Power cycle and listen after each candidate pair.\n"
+            "  5. A pass is readable boot text, such as System Bootstrap, Cisco IOS, ROMMON, or IOS XE.\n\n"
+            "If you are testing the earlier suspected mapping:\n"
+            "  Brown/tan adapter GND -> Cisco Pin 1\n"
+            "  Adapter RX wire       -> Cisco Pin 2\n"
+            "  Cisco Pin 3/Pin 4     -> empty\n\n"
+            "Do not connect adapter VCC to the Cisco header. Only add FT232RL TXO after RXI output is confirmed.\n\n"
+            f"Listen baud rate: {baudrate}\n"
+            f"Serial permission: {permission}\n"
+            f"Detected ports:\n{port_text}"
+        )
+
+        if self.console:
+            self.console.clear()
+            self.show_info_panel("UART Pin Discovery", content)
+            self.console.print()
+            if not ports:
+                self.show_error_dialog(
+                    "No Serial Port Detected",
+                    "Connect the USB UART adapter and check /dev/ttyUSB*, /dev/ttyACM*, or /dev/ttyS*.",
+                    ["Do not connect adapter TX or power pins", "Confirm dialout group access"]
+                )
+                return False
+            return self.confirm("Confirm only FT232RL GND plus one signal wire is connected, with VCC/DTR/CTS disconnected?", default=False)
+
+        print("\nUART Pin Discovery")
+        print("-" * 80)
+        print(content)
+        if not ports:
+            return False
+        return self.confirm("Confirm only FT232RL GND plus one signal wire is connected, with VCC/DTR/CTS disconnected?", default=False)
+
+    def show_uart_discovery_settings(self, default_log_file: str) -> Optional[Dict[str, Any]]:
+        """Collect UART discovery listener settings."""
+        cable_types = {
+            "1": {
+                "label": "FT232RL 6-pin header (DTR/RXI/TXO/VCC/CTS/GND)",
+                "note": "Use GND+RXI to find Cisco TX/output. Use TXO only later to test Cisco RX/input. Leave DTR, VCC, and CTS disconnected."
+            },
+            "2": {
+                "label": "Generic 6-pin USB-TTL board (GND/RX/TX/VCC/CTS/DTR)",
+                "note": "Use only GND and RX. Leave VCC, TX, CTS, and DTR disconnected."
+            },
+            "3": {
+                "label": "4/5-pin USB-TTL lead (GND/RX/TX/VCC[/3V3/5V])",
+                "note": "Use only GND and RX. Leave TX and all power pins disconnected."
+            },
+            "4": {
+                "label": "3-wire UART lead (GND/RX/TX)",
+                "note": "Use only GND and RX for discovery. Leave TX disconnected until output is confirmed."
+            },
+            "5": {
+                "label": "Keyed JST/Dupont harness",
+                "note": "Verify printed labels or continuity. Wire color alone is not enough."
+            },
+            "6": {
+                "label": "RJ45/rollover Cisco console cable",
+                "note": "Use this with the normal Cisco console port. Do not use RJ45 rollover wiring for board-level UART_DEBUG pin probing."
+            },
+            "7": {
+                "label": "DB9/RS-232 adapter",
+                "note": "DB9/RS-232 voltage levels are not TTL-safe. Use a TTL-level USB adapter for UART_DEBUG headers."
+            },
+            "8": {
+                "label": "Other/unknown cable",
+                "note": "Treat all non-GND/RX conductors as unsafe until identified."
+            }
+        }
+        ft232_signals = {
+            "1": {
+                "signal": "RXI",
+                "role": "Find Cisco TX/output",
+                "note": "Recommended first. GND+RXI can passively capture boot text."
+            },
+            "2": {
+                "signal": "TXO",
+                "role": "Record/test suspected Cisco RX/input",
+                "note": "GND+TXO alone cannot passively prove anything. Use only after a receive path is known."
+            },
+            "3": {
+                "signal": "RXI+TXO",
+                "role": "Known RXI path plus TXO introduction",
+                "note": "Use after RXI has confirmed boot output. First TXO test should be Enter only."
+            }
+        }
+        baud_presets = ["9600", "115200", "57600", "38400", "19200", "4800", "1200", "custom"]
+        sweep_bauds = [9600, 115200, 57600, 38400, 19200, 4800, 1200]
+
+        if self.console:
+            cable_menu = "\n".join(f"{key}. {info['label']}" for key, info in cable_types.items())
+            self.show_info_panel("Connected Cable Type", cable_menu)
+            cable_choice = Prompt.ask(
+                "Connected cable type",
+                choices=list(cable_types.keys()),
+                default="1",
+                show_choices=False
+            )
+            self.show_info_panel(
+                "Selected Cable",
+                f"{cable_types[cable_choice]['label']}\n{cable_types[cable_choice]['note']}"
+            )
+            self.show_info_panel(
+                "FT232RL Physical Layout",
+                "Header order on your adapter:\n\n"
+                "  DTR  RXI  TXO  VCC  CTS  GND\n\n"
+                "Use GND plus exactly one signal during discovery. VCC stays disconnected."
+            )
+            signal_menu = "\n".join(
+                f"{key}. {info['signal']} - {info['role']}" for key, info in ft232_signals.items()
+            )
+            self.show_info_panel("FT232RL Signal Under Test", signal_menu)
+            signal_choice = Prompt.ask(
+                "Connected FT232RL signal besides GND",
+                choices=list(ft232_signals.keys()),
+                default="1",
+                show_choices=False
+            )
+            self.show_info_panel(
+                "Signal Meaning",
+                f"{ft232_signals[signal_choice]['signal']} - {ft232_signals[signal_choice]['role']}\n"
+                f"{ft232_signals[signal_choice]['note']}"
+            )
+            ground_label = Prompt.ask("Cisco ground candidate label", default="Cisco Pin 1")
+            rx_labels_text = Prompt.ask(
+                "Cisco candidate labels, comma-separated",
+                default="Cisco Pin 2,Cisco Pin 3,Cisco Pin 4"
+            )
+            notes = Prompt.ask(
+                "Photo/orientation/wire-color notes",
+                default="none"
+            )
+            if ft232_signals[signal_choice]["signal"] == "TXO":
+                auto_baud = False
+                baudrates = [0]
+                duration = 0
+                self.show_info_panel(
+                    "TXO Candidate Recording",
+                    "TXO is an adapter output. The tool will record these candidates as possible Cisco RX/input pins without passive listening."
+                )
+            else:
+                auto_baud = self.confirm("Run auto-baud sweep for each RX candidate?", default=False)
+                baud_choice = Prompt.ask(
+                    "Discovery baud rate",
+                    choices=baud_presets,
+                    default="9600",
+                    show_choices=False
+                )
+                if auto_baud:
+                    baudrates = sweep_bauds
+                elif baud_choice == "custom":
+                    baudrates = [IntPrompt.ask("Custom baud rate", default=9600)]
+                else:
+                    baudrates = [int(baud_choice)]
+                duration = IntPrompt.ask("Listen duration in seconds", default=60)
+            output_file = Prompt.ask("Save boot log to", default=default_log_file)
+        else:
+            print("\nConnected cable type:")
+            for key, info in cable_types.items():
+                print(f"{key}. {info['label']}")
+            cable_choice = input("Cable type [1]: ").strip() or "1"
+            if cable_choice not in cable_types:
+                cable_choice = "8"
+            print(f"Selected: {cable_types[cable_choice]['label']}")
+            print(cable_types[cable_choice]["note"])
+            print("\nConnected FT232RL signal besides GND:")
+            for key, info in ft232_signals.items():
+                print(f"{key}. {info['signal']} - {info['role']}")
+            signal_choice = input("Signal [1]: ").strip() or "1"
+            if signal_choice not in ft232_signals:
+                signal_choice = "1"
+            print(f"Selected: {ft232_signals[signal_choice]['signal']} - {ft232_signals[signal_choice]['role']}")
+            print(ft232_signals[signal_choice]["note"])
+            print("\nFT232RL physical layout: DTR RXI TXO VCC CTS GND")
+            print("Use GND plus exactly one signal during discovery. VCC stays disconnected.")
+            ground_label = input("Cisco ground candidate label [Cisco Pin 1]: ").strip() or "Cisco Pin 1"
+            rx_labels_text = input("Cisco candidate labels, comma-separated [Cisco Pin 2,Cisco Pin 3,Cisco Pin 4]: ").strip() or "Cisco Pin 2,Cisco Pin 3,Cisco Pin 4"
+            notes = input("Photo/orientation/wire-color notes [none]: ").strip() or "none"
+            if ft232_signals[signal_choice]["signal"] == "TXO":
+                auto_baud = False
+                baudrates = [0]
+                duration = 0
+                print("TXO is an adapter output; candidates will be recorded without passive listening.")
+            else:
+                auto_baud = self.confirm("Run auto-baud sweep for each RX candidate?", default=False)
+                if auto_baud:
+                    baudrates = sweep_bauds
+                else:
+                    baud_choice = input("Discovery baud rate [9600, 115200, 57600, 38400, 19200, 4800, 1200, custom] [9600]: ").strip() or "9600"
+                    if baud_choice == "custom":
+                        baudrates = [int(input("Custom baud rate [9600]: ").strip() or "9600")]
+                    else:
+                        baudrates = [int(baud_choice) if baud_choice.isdigit() else 9600]
+                duration = int(input("Listen duration in seconds [60]: ").strip() or "60")
+            output_file = input(f"Save boot log to [{default_log_file}]: ").strip() or default_log_file
+
+        rx_labels = [label.strip() for label in rx_labels_text.split(",") if label.strip()]
+        if not rx_labels:
+            rx_labels = ["next candidate pin"]
+
+        return {
+            "cable_type": cable_types[cable_choice]["label"],
+            "cable_note": cable_types[cable_choice]["note"],
+            "adapter_signal": ft232_signals[signal_choice]["signal"],
+            "adapter_signal_role": ft232_signals[signal_choice]["role"],
+            "adapter_signal_note": ft232_signals[signal_choice]["note"],
+            "ground_label": ground_label,
+            "rx_labels": rx_labels,
+            "rx_label": rx_labels[0],
+            "baudrates": baudrates,
+            "baudrate": baudrates[0],
+            "auto_baud": auto_baud,
+            "notes": notes,
+            "duration": float(duration),
+            "output_file": output_file
+        }
+
+    def confirm_uart_discovery_attempt(self, attempt: Dict[str, Any]) -> bool:
+        """Confirm the wiring before one UART discovery attempt."""
+        content = (
+            f"Attempt: {attempt.get('attempt_index', '?')}\n"
+            f"Cable: {attempt.get('cable_type', 'unknown')}\n"
+            f"FT232RL signal: {attempt.get('adapter_signal', 'RXI')} ({attempt.get('adapter_signal_role', 'Find Cisco TX/output')})\n"
+            f"Adapter GND -> {attempt.get('ground_label', 'unknown')}\n"
+            f"Adapter {attempt.get('adapter_signal', 'RXI')} -> {attempt.get('rx_label', 'unknown')}\n"
+            f"Baud rate: {attempt.get('baudrate', 'unknown')}\n\n"
+            "Required state:\n"
+            "- FT232RL VCC disconnected\n"
+            "- Adapter power pins disconnected\n"
+            "- Adapter CTS/DTR/RTS disconnected\n"
+            "- Every non-test Cisco pin empty/floating"
+        )
+        if self.console:
+            self.show_info_panel("Discovery Attempt Wiring", content)
+        else:
+            print("\nDiscovery Attempt Wiring")
+            print("-" * 80)
+            print(content)
+        return self.confirm("Start this receive-only listen attempt?", default=True)
+
+    def show_uart_discovery_result(self, result: Dict[str, Any]) -> None:
+        """Show UART discovery listener result."""
+        sample = result.get("sample", "")
+        if len(sample) > 1200:
+            sample = sample[-1200:]
+        detected = result.get("detected_boot_text", False)
+        content = (
+            f"Cable type: {result.get('cable_type', 'unknown')}\n"
+            f"FT232RL signal: {result.get('adapter_signal', 'RXI')}\n"
+            f"Tested GND candidate: {result.get('ground_label', 'unknown')}\n"
+            f"Tested Cisco candidate: {result.get('rx_label', 'unknown')}\n"
+            f"Baud rate: {result.get('baudrate', 'unknown')}\n"
+            f"Captured: {result.get('bytes_captured', 0):,} bytes\n"
+            f"Classification: {result.get('classification', 'unknown')}\n"
+            f"Printable ratio: {result.get('printable_ratio', 0.0)}\n"
+            f"Replacement chars: {result.get('replacement_chars', 0)}\n"
+            f"Nonempty lines: {result.get('nonempty_line_count', 0)}\n"
+            f"Recommendation: {result.get('recommendation', 'review wiring and retry')}\n"
+            f"Saved: {result.get('output_file', 'unknown')}\n"
+            f"Likely Cisco boot text: {'yes' if detected else 'no'}\n\n"
+            "Recent output:\n"
+            f"{sample or '<no readable output captured>'}"
+        )
+
+        suggestions = []
+        if detected:
+            suggestions = [
+                "Record this GND/RX candidate pair as the likely console output path",
+                "Keep adapter power pins disconnected",
+                "Only add adapter TX later if you need interactive input"
+            ]
+        else:
+            suggestions = [
+                "Power cycle the router while listening",
+                "If no bytes were captured, move adapter RX to the next candidate Cisco pin",
+                "If unreadable bytes were captured, try a different baud rate or inspect ground/noise",
+                "Keep adapter TX and all power/control pins disconnected",
+                "If every RX candidate is silent, re-check or change the ground candidate"
+            ]
+
+        if self.console:
+            self.console.print(Panel(
+                content,
+                title="[bold cyan]UART Discovery Result[/bold cyan]",
+                border_style="green" if detected else "yellow",
+                padding=(1, 2)
+            ))
+            if suggestions:
+                self.show_info_panel("Next Steps", "\n".join(f"- {s}" for s in suggestions))
+            Prompt.ask("[bold cyan]Press Enter to continue[/bold cyan]", default="")
+        else:
+            print("\nUART Discovery Result")
+            print("-" * 80)
+            print(content)
+            print("\nNext Steps:")
+            for suggestion in suggestions:
+                print(f"- {suggestion}")
+            input("\nPress Enter to continue...")
+
+    def show_uart_discovery_session_result(self, session: Dict[str, Any]) -> None:
+        """Show a summary for a multi-attempt UART discovery session."""
+        attempts = session.get("attempts", [])
+        pin_map = session.get("pin_map", {})
+        if self.console:
+            table = Table(title="UART Discovery Session")
+            table.add_column("#", style="cyan", width=4)
+            table.add_column("RX Candidate", style="white")
+            table.add_column("Baud", style="yellow", width=8)
+            table.add_column("Bytes", justify="right", width=10)
+            table.add_column("Quality", justify="right", width=8)
+            table.add_column("Result", style="green")
+            for attempt in attempts:
+                table.add_row(
+                    str(attempt.get("attempt_index", "")),
+                    str(attempt.get("rx_label", "")),
+                    str(attempt.get("baudrate", "")),
+                    f"{attempt.get('bytes_captured', 0):,}",
+                    str(attempt.get("printable_ratio", "")),
+                    str(attempt.get("classification", "unknown"))
+                )
+            self.console.print(table)
+            map_lines = [f"{pin}: {status}" for pin, status in pin_map.items()]
+            self.show_info_panel(
+                "Pin Map",
+                "\n".join(map_lines) if map_lines else "No pin map entries"
+            )
+            self.show_info_panel(
+                "Saved Files",
+                f"Combined log: {session.get('combined_log_file')}\n"
+                f"Session JSON: {session.get('session_file')}\n"
+                f"Attempt CSV: {session.get('csv_file')}"
+            )
+            wiring_plan = session.get("wiring_plan", [])
+            if wiring_plan:
+                self.show_info_panel("Final Wiring Plan", "\n".join(f"- {item}" for item in wiring_plan))
+            recommendations = session.get("recommendations", [])
+            if recommendations:
+                self.show_info_panel("Recommendations", "\n".join(f"- {item}" for item in recommendations))
+            Prompt.ask("[bold cyan]Press Enter to continue[/bold cyan]", default="")
+        else:
+            print("\nUART Discovery Session")
+            print("-" * 80)
+            for attempt in attempts:
+                print(
+                    f"{attempt.get('attempt_index')}: {attempt.get('rx_label')} "
+                    f"@ {attempt.get('baudrate')} baud, {attempt.get('bytes_captured', 0)} bytes, "
+                    f"quality {attempt.get('printable_ratio', '')}, {attempt.get('classification')}"
+                )
+            print("\nPin Map:")
+            for pin, status in pin_map.items():
+                print(f"- {pin}: {status}")
+            print("\nRecommendations:")
+            for item in session.get("recommendations", []):
+                print(f"- {item}")
+            print("\nFinal Wiring Plan:")
+            for item in session.get("wiring_plan", []):
+                print(f"- {item}")
+            print(f"\nCombined log: {session.get('combined_log_file')}")
+            print(f"Session JSON: {session.get('session_file')}")
+            print(f"Attempt CSV: {session.get('csv_file')}")
+            input("\nPress Enter to continue...")
+
+    def show_uart_tx_intro_checklist(self, ground_label: str, rx_label: str) -> bool:
+        """Show checklist before introducing adapter TX after receive discovery."""
+        content = (
+            "Only do this after readable boot output has confirmed the receive path.\n\n"
+            f"Known receive pair:\n"
+            f"  Adapter GND -> {ground_label}\n"
+            f"  Adapter RX  -> {rx_label}\n\n"
+            "Before adding TX:\n"
+            "  - Keep VCC/3V3/5V disconnected\n"
+            "  - Keep CTS/DTR/RTS disconnected\n"
+            "  - Connect adapter TX only to a suspected Cisco RX/input pin\n"
+            "  - First test should be pressing Enter only\n"
+            "  - Stop if the router resets, output becomes unstable, or the adapter heats"
+        )
+        if self.console:
+            self.show_info_panel("TX Introduction Checklist", content)
+        else:
+            print("\nTX Introduction Checklist")
+            print("-" * 80)
+            print(content)
+        return self.confirm("Mark this checklist reviewed?", default=False)
+
+    def show_cisco_4321_preflight(self, ports: list, baudrate: int = 9600,
+                                  in_dialout_group: bool = False) -> bool:
+        """Show Cisco 4321 ISR-specific preflight checks."""
+        port_text = "\n".join(f"  - {port}" for port in ports) if ports else "  - No serial ports detected"
+        permission = "OK" if in_dialout_group else "Needs attention"
+        permission_detail = (
+            "Current user is in the dialout group."
+            if in_dialout_group
+            else "Current user may need dialout group access for /dev/tty* ports."
+        )
+
+        content = (
+            "Target router: Cisco 4321 ISR / ISR4321\n\n"
+            "Expected console settings:\n"
+            f"  - Baud rate: {baudrate}\n"
+            "  - Data bits: 8\n"
+            "  - Parity: none\n"
+            "  - Stop bits: 1\n"
+            "  - Flow control: none\n\n"
+            f"Detected serial ports:\n{port_text}\n\n"
+            f"Linux serial permission: {permission}\n"
+            f"  - {permission_detail}"
+        )
+
+        if self.console:
+            self.console.clear()
+            self.show_info_panel("Cisco 4321 ISR Preflight", content)
+            self.console.print()
+            if not ports:
+                self.show_error_dialog(
+                    "No Serial Port Detected",
+                    "No console port was found before starting the Cisco 4321 ISR workflow.",
+                    [
+                        "Check the console cable",
+                        "Try a different USB port",
+                        "Verify /dev/ttyUSB*, /dev/ttyACM*, or /dev/ttyS* exists",
+                        "Confirm dialout group access"
+                    ]
+                )
+                return False
+            return self.confirm("Continue with these Cisco 4321 ISR console settings?", default=True)
+
+        print("\nCisco 4321 ISR Preflight")
+        print("-" * 80)
+        print(content)
+        if not ports:
+            return False
+        return self.confirm("Continue with these Cisco 4321 ISR console settings?", default=True)
+
+    def show_uart_dump_menu(self, default_output_file: str) -> Optional[Dict[str, Any]]:
+        """Collect raw UART firmware/image dump settings."""
+        if self.console:
+            self.console.clear()
+            self.show_info_panel(
+                "UART Firmware Dump",
+                "Capture raw bytes from the connected Cisco 4321 ISR console/UART directly to a file.\n\n"
+                "Use this only when the router or bootloader is already transmitting an image/firmware stream. "
+                "The capture stops at the expected byte count, after idle timeout, or at the maximum timeout."
+            )
+            self.console.print()
+            if not self.confirm("Start a raw UART capture session?", default=False):
+                return None
+
+            output_file = Prompt.ask("Output file", default=default_output_file)
+            size_text = Prompt.ask("Expected bytes (blank for unknown)", default="").strip()
+            timeout = IntPrompt.ask("Maximum capture time in seconds", default=3600)
+            idle_timeout = IntPrompt.ask("Stop after idle seconds", default=10)
+        else:
+            print("\nUART Firmware Dump")
+            print("-" * 80)
+            print("Capture raw bytes from the connected UART to a file.")
+            if not self.confirm("Start a raw UART capture session?", default=False):
+                return None
+            output_file = input(f"Output file [{default_output_file}]: ").strip() or default_output_file
+            size_text = input("Expected bytes (blank for unknown): ").strip()
+            timeout = int(input("Maximum capture time in seconds [3600]: ").strip() or "3600")
+            idle_timeout = int(input("Stop after idle seconds [10]: ").strip() or "10")
+
+        expected_size = None
+        if size_text:
+            try:
+                expected_size = int(size_text.replace("_", "").replace(",", ""))
+            except ValueError:
+                self.show_error_dialog("Invalid Size", "Expected bytes must be a whole number")
+                return None
+
+        return {
+            "output_file": output_file,
+            "expected_size": expected_size,
+            "timeout": float(timeout),
+            "idle_timeout": float(idle_timeout)
+        }
+
+    def show_uart_dump_result(self, result: Dict[str, Any]) -> None:
+        """Show raw UART dump result."""
+        bytes_written = result.get("bytes_written", 0)
+        duration = result.get("duration", 0)
+        reason = result.get("reason", "unknown")
+        output_file = result.get("output_file", "unknown")
+        expected_size = result.get("expected_size")
+        expected_text = f"\nExpected: {expected_size:,} bytes" if expected_size is not None else ""
+        content = (
+            f"File: {output_file}\n"
+            f"Captured: {bytes_written:,} bytes{expected_text}\n"
+            f"Duration: {duration:.1f}s\n"
+            f"Stopped by: {reason}"
+        )
+        if self.console:
+            self.console.print(Panel(
+                content,
+                title="[bold green]UART Dump Complete[/bold green]",
+                border_style="green",
+                padding=(1, 2)
+            ))
+            Prompt.ask("[bold cyan]Press Enter to continue[/bold cyan]", default="")
+        else:
+            print("\nUART Dump Complete")
+            print("-" * 80)
+            print(content)
+            input("\nPress Enter to continue...")
+
+    def show_decompression_menu(self, default_dir: str) -> Optional[Dict[str, Any]]:
+        """Collect decompression settings for an existing firmware dump."""
+        formats = ["auto", "gzip", "bzip2", "xz", "zip", "tar", "zlib", "binwalk"]
+
+        if self.console:
+            self.console.clear()
+            self.show_info_panel(
+                "Decompress Firmware Dump",
+                "Decompress or extract a captured UART dump. Auto-detect handles gzip, bzip2, xz, zip, tar, "
+                "and common zlib/deflate streams. Choose binwalk for broader firmware carving/extraction."
+            )
+            self.console.print()
+            default_input = str(Path(default_dir) / "uart_dump.bin")
+            input_file = Prompt.ask("Input dump file", default=default_input)
+            output_path = Prompt.ask("Output path (blank for automatic)", default="").strip() or None
+            format_hint = Prompt.ask("Format", choices=formats, default="auto")
+        else:
+            print("\nDecompress Firmware Dump")
+            print("-" * 80)
+            input_file = input(f"Input dump file [{Path(default_dir) / 'uart_dump.bin'}]: ").strip()
+            if not input_file:
+                input_file = str(Path(default_dir) / "uart_dump.bin")
+            output_path = input("Output path (blank for automatic): ").strip() or None
+            format_hint = input("Format [auto/gzip/bzip2/xz/zip/tar/zlib/binwalk] [auto]: ").strip() or "auto"
+            if format_hint not in formats:
+                self.show_error_dialog("Invalid Format", f"Unsupported format: {format_hint}")
+                return None
+
+        return {
+            "input_file": input_file,
+            "output_path": output_path,
+            "format_hint": format_hint
+        }
+
+    def show_decompression_result(self, result: Dict[str, Any]) -> None:
+        """Show decompression result."""
+        content = (
+            f"Input: {result.get('input_file', 'unknown')}\n"
+            f"Output: {result.get('output_path', 'unknown')}\n"
+            f"Format: {result.get('format', 'unknown')}"
+        )
+
+        if self.console:
+            self.console.print(Panel(
+                content,
+                title="[bold green]Decompression Complete[/bold green]",
+                border_style="green",
+                padding=(1, 2)
+            ))
+            Prompt.ask("[bold cyan]Press Enter to continue[/bold cyan]", default="")
+        else:
+            print("\nDecompression Complete")
+            print("-" * 80)
+            print(content)
+            input("\nPress Enter to continue...")
+
+    def show_recovery_resume_notice(self, state: Dict[str, Any]) -> None:
+        """Warn about an incomplete previous recovery workflow."""
+        phase = state.get("phase", "unknown")
+        next_step = state.get("next_step", "Review router state before continuing.")
+        timestamp = state.get("timestamp", "unknown")
+        details = state.get("details", {})
+        detail_text = ""
+        if details:
+            detail_text = "\n\nDetails:\n" + "\n".join(f"  - {key}: {value}" for key, value in details.items())
+
+        content = (
+            f"Previous recovery phase: {phase}\n"
+            f"Recorded at: {timestamp}\n\n"
+            f"Recommended next step:\n  {next_step}"
+            f"{detail_text}"
+        )
+
+        if self.console:
+            self.console.clear()
+            self.show_error_dialog(
+                "Incomplete Recovery Detected",
+                content,
+                [
+                    "Connect to the Cisco 4321 ISR before continuing",
+                    "If config-register was set to 0x2142, restore 0x2102 before finishing",
+                    "Use Advanced Password Reset > Restore Config Register if IOS is available"
+                ]
+            )
+            Prompt.ask("[bold cyan]Press Enter to continue[/bold cyan]", default="")
+        else:
+            print("\nIncomplete Recovery Detected")
+            print("-" * 80)
+            print(content)
+            input("\nPress Enter to continue...")
+
+    def show_router_identity(self, identity: Dict[str, Any]) -> None:
+        """Show best-effort Cisco 4321 ISR identity check results."""
+        status = identity.get("status", "Unknown")
+        model = identity.get("model", "Unknown")
+        serial = identity.get("serial", "Unknown")
+        ios_version = identity.get("ios_version", "Unknown")
+        is_4321 = identity.get("is_4321", False)
+        border = "green" if is_4321 else "yellow"
+        content = (
+            f"Status: {status}\n\n"
+            f"Model/PID: {model}\n"
+            f"Serial: {serial}\n"
+            f"IOS XE/IOS: {ios_version}"
+        )
+
+        if self.console:
+            self.console.print()
+            self.console.print(Panel(
+                content,
+                title="[bold cyan]Cisco 4321 ISR Identity Check[/bold cyan]",
+                border_style=border,
+                padding=(1, 2)
+            ))
+            self.console.print()
+        else:
+            print("\nCisco 4321 ISR Identity Check")
+            print("-" * 80)
+            print(content)
+
+    def show_break_failure_menu(self) -> str:
+        """Offer recovery choices when automated break sequence fails."""
+        if self.console:
+            self.show_error_dialog(
+                "ROMmon Break Not Detected",
+                "The tool did not detect a Cisco 4321 ISR rommon prompt after automated break attempts.",
+                [
+                    "Break must land early in boot",
+                    "Power cycle and retry if IOS has already started",
+                    "Manual ROMmon commands can still be used"
+                ]
+            )
+            self.console.print()
+            choice = Prompt.ask(
+                "[bold cyan]Next action[/bold cyan]",
+                choices=["retry", "manual", "abort"],
+                default="retry"
+            )
+            return choice
+
+        print("\nROMmon Break Not Detected")
+        print("1. Retry break sequence")
+        print("2. Show manual ROMmon assistant")
+        print("3. Abort workflow")
+        choice = input("Select option [1-3]: ").strip() or "1"
+        return {"1": "retry", "2": "manual", "3": "abort"}.get(choice, "abort")
+
+    def show_rommon_manual_assistant(self) -> None:
+        """Show manual Cisco 4321 ISR ROMmon recovery commands."""
+        content = (
+            "Use this when automated break timing fails.\n\n"
+            "1. Power cycle the Cisco 4321 ISR.\n"
+            "2. Send your terminal's break signal during early boot.\n"
+            "3. At the rommon prompt, run:\n\n"
+            "   rommon 1 > confreg 0x2142\n"
+            "   rommon 2 > reset\n\n"
+            "After IOS boots without startup config, return here and continue the workflow.\n"
+            "Before finishing, restore normal boot with:\n\n"
+            "   Router(config)# config-register 0x2102\n"
+            "   Router# write memory"
+        )
+
+        if self.console:
+            self.console.print(Panel(
+                content,
+                title="[bold yellow]Manual Cisco 4321 ISR ROMmon Assistant[/bold yellow]",
+                border_style="yellow",
+                padding=(1, 2)
+            ))
+            Prompt.ask("[bold cyan]Press Enter after trying manual ROMmon entry[/bold cyan]", default="")
+        else:
+            print("\nManual Cisco 4321 ISR ROMmon Assistant")
+            print("-" * 80)
+            print(content)
+            input("\nPress Enter after trying manual ROMmon entry...")
     
     def show_port_selection(self, ports: list) -> Optional[str]:
         """Show port selection menu"""

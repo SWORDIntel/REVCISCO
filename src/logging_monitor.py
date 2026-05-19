@@ -6,6 +6,7 @@ import logging
 import logging.handlers
 import json
 import os
+import re
 import sys
 import time
 import threading
@@ -191,6 +192,13 @@ class StructuredFormatter(logging.Formatter):
 
 class LoggingMonitor:
     """Extensive logging and monitoring system"""
+
+    SENSITIVE_COMMAND_PATTERNS = [
+        re.compile(r'(?im)^(\s*enable\s+secret\s+).*$'),
+        re.compile(r'(?im)^(\s*enable\s+password\s+).*$'),
+        re.compile(r'(?im)^(\s*password\s+).*$'),
+        re.compile(r'(?im)^(\s*username\s+\S+.*?\s(?:password|secret)\s+).*$'),
+    ]
     
     def __init__(self, log_dir: str = "logs", monitoring_dir: str = "monitoring", 
                  log_level: str = "INFO", enable_console: bool = True):
@@ -261,6 +269,13 @@ class LoggingMonitor:
         logger.addHandler(json_handler)
         
         return logger
+
+    def _redact_sensitive_text(self, text: str) -> str:
+        """Redact password-bearing Cisco commands before command logging."""
+        redacted = text
+        for pattern in self.SENSITIVE_COMMAND_PATTERNS:
+            redacted = pattern.sub(r'\1<redacted>', redacted)
+        return redacted
     
     def _setup_command_logger(self) -> logging.Logger:
         """Setup command/response logger"""
@@ -311,7 +326,7 @@ class LoggingMonitor:
     def log_command(self, command: str, direction: str = "SENT"):
         """Log a command sent or response received"""
         extra = {'direction': direction}
-        self.command_logger.debug(command, extra=extra)
+        self.command_logger.debug(self._redact_sensitive_text(command), extra=extra)
         if direction == "SENT":
             self.metrics.record_bytes(sent=len(command.encode('utf-8')))
         else:

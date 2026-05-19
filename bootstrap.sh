@@ -145,11 +145,38 @@ install_dependencies() {
     print_success "Dependencies installed"
 }
 
+# Check optional firmware analysis tools
+check_optional_tools() {
+    print_header "Checking Optional Tools"
+
+    BINWALK_CMD=""
+    if [ -x "$HOME/.cargo/bin/binwalk" ]; then
+        BINWALK_CMD="$HOME/.cargo/bin/binwalk"
+    elif command -v binwalk &> /dev/null; then
+        BINWALK_CMD="$(command -v binwalk)"
+    fi
+
+    if [ -z "$BINWALK_CMD" ]; then
+        print_warning "binwalk not found"
+        print_info "Optional install for firmware carving:"
+        print_info "  cargo install --git https://github.com/ReFirmLabs/binwalk.git binwalk"
+        return 0
+    fi
+
+    if "$BINWALK_CMD" --help &> /dev/null; then
+        print_success "binwalk available: $BINWALK_CMD"
+    else
+        print_warning "binwalk found but failed to start: $BINWALK_CMD"
+        print_info "Recommended fix:"
+        print_info "  cargo install --git https://github.com/ReFirmLabs/binwalk.git binwalk"
+    fi
+}
+
 # Create directory structure
 create_directories() {
     print_header "Creating Directory Structure"
     
-    DIRS=("logs" "monitoring" "backups" "config")
+    DIRS=("logs" "monitoring" "backups" "config" "firmware_dumps")
     
     for dir in "${DIRS[@]}"; do
         if [ ! -d "$dir" ]; then
@@ -223,6 +250,7 @@ sys.path.insert(0, str(src_dir))
 try:
     from logging_monitor import LoggingMonitor
     from prompt_detector import PromptDetector
+    from serial_connection import SerialConnection
     print('✓ Core modules import successfully')
 except ImportError as e:
     print(f'✗ Import error: {e}')
@@ -291,6 +319,9 @@ main() {
     
     # Install dependencies
     install_dependencies
+
+    # Check optional firmware analysis tools
+    check_optional_tools
     
     # Create directories
     create_directories
