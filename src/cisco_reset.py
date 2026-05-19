@@ -4,6 +4,7 @@ Main tool script for Cisco 4321 ISR Password Reset
 
 import argparse
 import bz2
+import csv
 import gzip
 import grp
 import json
@@ -549,6 +550,7 @@ class CiscoReset:
         output_path = Path(settings["output_file"]).expanduser()
         output_path.parent.mkdir(parents=True, exist_ok=True)
         session_file = output_path.with_suffix(output_path.suffix + ".session.json")
+        csv_file = output_path.with_suffix(output_path.suffix + ".attempts.csv")
         session = {
             "started_at": datetime.now().isoformat(timespec="seconds"),
             "port": port,
@@ -596,9 +598,12 @@ class CiscoReset:
         session["ended_at"] = datetime.now().isoformat(timespec="seconds")
         session["attempts"] = attempts
         session["pin_map"] = self._build_uart_pin_map(session["ground_label"], attempts)
+        session["recommendations"] = self._build_uart_session_recommendations(attempts)
         session["combined_log_file"] = str(output_path)
         session["session_file"] = str(session_file)
+        session["csv_file"] = str(csv_file)
         session_file.write_text(json.dumps(session, indent=2), encoding="utf-8")
+        self._write_discovery_attempt_csv(csv_file, attempts)
         self.tui.show_uart_discovery_session_result(session)
 
         successful = [attempt for attempt in attempts if attempt.get("detected_boot_text")]
@@ -641,12 +646,15 @@ class CiscoReset:
             )
             output = discovery_conn.read_output(settings["duration"])
             classification, detected = self._classify_uart_discovery_output(output)
+            quality = self._measure_uart_output_quality(output)
             result = {
                 **attempt,
                 "bytes_captured": len(output.encode("utf-8", errors="replace")),
                 "output_file": getattr(log_file, "name", "unknown"),
                 "detected_boot_text": detected,
                 "classification": classification,
+                "recommendation": self._build_uart_attempt_recommendation(classification),
+                **quality,
                 "sample": output
             }
             self._write_discovery_attempt_log(log_file, settings, result, output)
@@ -675,6 +683,37 @@ class CiscoReset:
             return "unreadable_output", False
         return "readable_unknown", False
 
+    def _measure_uart_output_quality(self, output: str) -> Dict[str, Any]:
+        """Return simple readability metrics for UART discovery output."""
+        if not output:
+            return {
+                "printable_ratio": 0.0,
+                "replacement_chars": 0,
+                "line_count": 0,
+                "nonempty_line_count": 0
+            }
+
+        printable = sum(1 for char in output if char.isprintable() or char in "\r\n\t")
+        lines = output.splitlines()
+        return {
+            "printable_ratio": round(printable / max(len(output), 1), 3),
+            "replacement_chars": output.count("\ufffd"),
+            "line_count": len(lines),
+            "nonempty_line_count": len([line for line in lines if line.strip()])
+        }
+
+    def _build_uart_attempt_recommendation(self, classification: str) -> str:
+        """Build an action hint for one discovery attempt classification."""
+        recommendations = {
+            "boot_text": "Likely Cisco TX/output pin found. Record this pair and keep power pins disconnected.",
+            "readable_unknown": "Readable text was captured. Verify content, try Enter only after TX checklist, or retest at adjacent baud rates.",
+            "unreadable_output": "Electrical activity was captured but text is corrupt. Try another baud rate, check ground/noise, or consider inverted/non-TTL signaling.",
+            "no_output": "No data seen. Move adapter RX to the next candidate pin or re-check the ground candidate.",
+            "connection_failed": "Serial port could not be opened. Check permissions, cable path, and other serial tools.",
+            "skipped": "Attempt skipped by user."
+        }
+        return recommendations.get(classification, "Review wiring and repeat the attempt.")
+
     def _write_discovery_session_header(self, log_file: Any, session: Dict[str, Any]) -> None:
         """Write metadata for a UART discovery session log."""
         log_file.write("# UART Pin Discovery Session Log\n")
@@ -699,7 +738,11 @@ class CiscoReset:
         log_file.write(f"# Cisco ground candidate: {result['ground_label']}\n")
         log_file.write(f"# Cisco RX-test candidate: {result['rx_label']}\n")
         log_file.write(f"# Classification: {result['classification']}\n")
+        log_file.write(f"# Recommendation: {result.get('recommendation', 'unknown')}\n")
         log_file.write(f"# Bytes captured: {result['bytes_captured']}\n")
+        log_file.write(f"# Printable ratio: {result.get('printable_ratio', 0.0)}\n")
+        log_file.write(f"# Replacement chars: {result.get('replacement_chars', 0)}\n")
+        log_file.write(f"# Nonempty lines: {result.get('nonempty_line_count', 0)}\n")
         log_file.write("# --- captured output follows ---\n")
         log_file.write(output)
         log_file.write("\n# --- end attempt ---\n\n")
@@ -724,6 +767,55 @@ class CiscoReset:
             elif classification == "connection_failed":
                 pin_map.setdefault(rx_label, "not tested; connection failed")
         return pin_map
+
+    def _build_uart_session_recommendations(self, attempts: List[Dict[str, Any]]) -> List[str]:
+        """Summarize next actions after a discovery session."""
+        if any(attempt.get("classification") == "boot_text" for attempt in attempts):
+            return [
+                "Readable Cisco boot text was found. Treat that RX candidate as likely Cisco TX/output.",
+                "Keep adapter power pins disconnected.",
+                "Use the TX introduction checklist before connecting adapter TX."
+            ]
+        if any(attempt.get("classification") == "readable_unknown" for attempt in attempts):
+            return [
+                "Readable non-boot text was captured. Save the pair as suspicious and retest around the same baud.",
+                "If the router was already booted, press no keys until the TX checklist is reviewed."
+            ]
+        if any(attempt.get("classification") == "unreadable_output" for attempt in attempts):
+            return [
+                "One or more pins showed activity but corrupt text.",
+                "Prioritize baud-rate changes, ground quality, shorter leads, and avoiding RS-232-level adapters."
+            ]
+        if any(attempt.get("classification") == "connection_failed" for attempt in attempts):
+            return [
+                "Discovery could not open the serial port.",
+                "Check dialout permissions, close other serial tools, and reconnect the USB adapter."
+            ]
+        return [
+            "No output was captured from tested candidates.",
+            "Try another RX candidate, verify the ground candidate, and power cycle during the listen window."
+        ]
+
+    def _write_discovery_attempt_csv(self, csv_file: Path, attempts: List[Dict[str, Any]]) -> None:
+        """Write a CSV summary of UART discovery attempts."""
+        fieldnames = [
+            "attempt_index",
+            "rx_label",
+            "ground_label",
+            "baudrate",
+            "classification",
+            "bytes_captured",
+            "printable_ratio",
+            "replacement_chars",
+            "nonempty_line_count",
+            "detected_boot_text",
+            "recommendation"
+        ]
+        with open(csv_file, "w", encoding="utf-8", newline="") as f:
+            writer = csv.DictWriter(f, fieldnames=fieldnames)
+            writer.writeheader()
+            for attempt in attempts:
+                writer.writerow({field: attempt.get(field, "") for field in fieldnames})
 
     def _detect_compression_format(self, input_path: Path) -> str:
         """Detect common compression/archive formats by magic bytes."""

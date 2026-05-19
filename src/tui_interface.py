@@ -417,6 +417,10 @@ This tool will help you reset the password on your Cisco 4321 ISR router.
             f"Baud rate: {result.get('baudrate', 'unknown')}\n"
             f"Captured: {result.get('bytes_captured', 0):,} bytes\n"
             f"Classification: {result.get('classification', 'unknown')}\n"
+            f"Printable ratio: {result.get('printable_ratio', 0.0)}\n"
+            f"Replacement chars: {result.get('replacement_chars', 0)}\n"
+            f"Nonempty lines: {result.get('nonempty_line_count', 0)}\n"
+            f"Recommendation: {result.get('recommendation', 'review wiring and retry')}\n"
             f"Saved: {result.get('output_file', 'unknown')}\n"
             f"Likely Cisco boot text: {'yes' if detected else 'no'}\n\n"
             "Recent output:\n"
@@ -468,6 +472,7 @@ This tool will help you reset the password on your Cisco 4321 ISR router.
             table.add_column("RX Candidate", style="white")
             table.add_column("Baud", style="yellow", width=8)
             table.add_column("Bytes", justify="right", width=10)
+            table.add_column("Quality", justify="right", width=8)
             table.add_column("Result", style="green")
             for attempt in attempts:
                 table.add_row(
@@ -475,6 +480,7 @@ This tool will help you reset the password on your Cisco 4321 ISR router.
                     str(attempt.get("rx_label", "")),
                     str(attempt.get("baudrate", "")),
                     f"{attempt.get('bytes_captured', 0):,}",
+                    str(attempt.get("printable_ratio", "")),
                     str(attempt.get("classification", "unknown"))
                 )
             self.console.print(table)
@@ -485,8 +491,13 @@ This tool will help you reset the password on your Cisco 4321 ISR router.
             )
             self.show_info_panel(
                 "Saved Files",
-                f"Combined log: {session.get('combined_log_file')}\nSession JSON: {session.get('session_file')}"
+                f"Combined log: {session.get('combined_log_file')}\n"
+                f"Session JSON: {session.get('session_file')}\n"
+                f"Attempt CSV: {session.get('csv_file')}"
             )
+            recommendations = session.get("recommendations", [])
+            if recommendations:
+                self.show_info_panel("Recommendations", "\n".join(f"- {item}" for item in recommendations))
             Prompt.ask("[bold cyan]Press Enter to continue[/bold cyan]", default="")
         else:
             print("\nUART Discovery Session")
@@ -495,13 +506,17 @@ This tool will help you reset the password on your Cisco 4321 ISR router.
                 print(
                     f"{attempt.get('attempt_index')}: {attempt.get('rx_label')} "
                     f"@ {attempt.get('baudrate')} baud, {attempt.get('bytes_captured', 0)} bytes, "
-                    f"{attempt.get('classification')}"
+                    f"quality {attempt.get('printable_ratio', '')}, {attempt.get('classification')}"
                 )
             print("\nPin Map:")
             for pin, status in pin_map.items():
                 print(f"- {pin}: {status}")
+            print("\nRecommendations:")
+            for item in session.get("recommendations", []):
+                print(f"- {item}")
             print(f"\nCombined log: {session.get('combined_log_file')}")
             print(f"Session JSON: {session.get('session_file')}")
+            print(f"Attempt CSV: {session.get('csv_file')}")
             input("\nPress Enter to continue...")
 
     def show_uart_tx_intro_checklist(self, ground_label: str, rx_label: str) -> bool:

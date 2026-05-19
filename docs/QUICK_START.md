@@ -63,7 +63,7 @@ All other Cisco pins              -> empty
 
 Test combinations one at a time: select the cable type in option 1, keep adapter GND on a likely ground, enter one or more RX candidate labels, select a baud or enable auto-baud sweep, power cycle during each listen window, and record the first pair that produces readable Cisco boot text. Try 9600 first, then 115200 if 9600 is silent. RX/TX labels are from the adapter's perspective, so adapter RX listens to Cisco TX output.
 
-The discovery result classifies each attempt as `boot_text`, `readable_unknown`, `unreadable_output`, `no_output`, `connection_failed`, or `skipped`. It also writes a combined log plus a `.session.json` file containing the tested cable type, notes, attempts, and generated pin map.
+The discovery result classifies each attempt as `boot_text`, `readable_unknown`, `unreadable_output`, `no_output`, `connection_failed`, or `skipped`. It also reports readability quality, shows next-step recommendations, and writes a combined log plus `.session.json` and `.attempts.csv` files containing the tested cable type, notes, attempts, and generated pin map.
 
 For the earlier suspected mapping, use brown/tan from adapter GND on Cisco Pin 1 and the adapter RX wire on Cisco Pin 2. If yellow is plugged into adapter RX, yellow is the RX test wire. Keep red, orange, adapter power pins, and every non-test Cisco pin disconnected.
 

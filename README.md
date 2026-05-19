@@ -394,7 +394,7 @@ General discovery loop:
 5. Select a single baud rate or enable auto-baud sweep.
 6. Confirm each attempt before listening.
 7. Power cycle the router during each listen window.
-8. Check the session summary for bytes captured, output classification, and pin map status.
+8. Check the session summary for bytes captured, readability quality, output classification, recommendations, and pin map status.
 ```
 
 Pass condition:
@@ -437,6 +437,7 @@ Option 1 listens receive-only and saves:
 ```text
 logs/uart_pin_discovery_*.log               combined session log with metadata and captured output
 logs/uart_pin_discovery_*.log.session.json  machine-readable session history and pin map
+logs/uart_pin_discovery_*.log.attempts.csv  spreadsheet-friendly attempt summary
 ```
 
 After boot text is found, the tool can show a separate TX introduction checklist. Keep VCC/3V3/5V disconnected; the first TX test should be pressing Enter only.
