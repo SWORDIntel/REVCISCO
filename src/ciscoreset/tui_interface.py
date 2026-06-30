@@ -1198,13 +1198,16 @@ This tool will help you reset the password on your Cisco 4321 ISR router.
             # Step 1: Physical preparation
             self.console.clear()
             step1 = Panel(
-                "[bold]Step 1: Physical Preparation[/bold]\n\n"
-                "Before we begin, ensure:\n"
-                "  ✓ Serial/TTY cable is connected to router console port\n"
-                "  ✓ Serial/TTY cable is connected to your computer\n"
-                "  ✓ Router is currently powered ON\n"
-                "  ✓ You have physical access to power cycle the router\n\n"
-                "[dim]We'll power cycle the router in the next step.[/dim]",
+                "[bold]Step 1: Physical Preparation & UART Hookup[/bold]\n\n"
+                "[bold cyan]Internal UART Header Location (Cisco 4321 ISR):[/bold cyan]\n"
+                "The motherboard has a 4-pin UART header located near the fan.\n"
+                "We have reverse-engineered the exact pinout for this header:\n\n"
+                "  [bold red]Pin 1 (Top Left):[/bold red]    VCC / Power (DO NOT CONNECT)\n"
+                "  [bold green]Pin 2 (Top Right):[/bold green]   Router TX   (Connect to Adapter RX)\n"
+                "  [bold white]Pin 3 (Bottom Left):[/bold white] GND         (Connect to Adapter GND)\n"
+                "  [bold yellow]Pin 4 (Bottom Right):[/bold yellow]Router RX   (Connect to Adapter TX)\n\n"
+                "[bold yellow]WARNING: DO NOT CONNECT VCC (Pin 1) to your adapter![/bold yellow]\n\n"
+                "Ensure your TTL adapter is connected to your computer before proceeding.",
                 title="[bold cyan]Preparation[/bold cyan]",
                 border_style="cyan",
                 padding=(1, 2)

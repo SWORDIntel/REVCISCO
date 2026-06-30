@@ -1,0 +1,48 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "ciscoreset"
+version = "0.1.0"
+description = "Cisco 4321 ISR Password Reset Tool"
+readme = "README.md"
+requires-python = ">=3.7"
+dependencies = [
+    "pyserial>=3.5",
+    "pyserial-asyncio>=0.6",
+    "rich>=13.0.0",
+    "textual>=0.40.0"
+]
+
+[project.scripts]
+ciscoreset = "ciscoreset.main:main"
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0",
+    "pytest-mock>=3.10",
+    "pytest-asyncio>=0.21",
+    "mypy>=1.0",
+    "ruff>=0.1.0",
+    "pyinstaller>=6.0"
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/ciscoreset"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py37"
+
+[tool.mypy]
+python_version = "3.7"
+strict = true
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+minversion = "7.0"
+addopts = "-ra -q"
+testpaths = [
+    "tests",
+]

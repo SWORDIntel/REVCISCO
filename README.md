@@ -7,25 +7,20 @@ A robust, production-ready Python tool for automated password recovery on Cisco 
 
 ## 🚀 Quick Start
 
-### Single Command Installation
+### Installation
+
+We use modern Python packaging. Install directly via pip:
 
 ```bash
-./bootstrap.sh
+python3 -m venv .venv
+source .venv/bin/activate
+pip install .
 ```
-
-The bootstrap script automatically:
-- ✅ Checks Python version (3.7+)
-- ✅ Creates isolated virtual environment
-- ✅ Installs all dependencies
-- ✅ Sets up user permissions (dialout group)
-- ✅ Creates directory structure
-- ✅ Verifies installation
 
 ### Run the Tool
 
 ```bash
-source venv/bin/activate
-python src/bootstrap.py
+ciscoreset
 ```
 
 ## 📊 Architecture Diagram
@@ -279,26 +274,25 @@ CISCORESET/
 
 - **Python 3.7+** - Required for the tool
 - **Linux System** - For TTY/serial port access
-- **Direct TTY Connection** - Physical connection to Cisco 4321 ISR console port
-- **Serial/TTY Cable** - Console cable connected to router and computer
+- **Internal UART Hookup** - Direct connection to the Cisco 4321 ISR internal 4-pin UART headers on the motherboard.
+- **USB-to-TTL Adapter** - E.g. FT232RL (prioritized), CH340, CP2102, or PL2303.
 - **sudo Access** - For adding user to dialout group (one-time setup)
 
 ## 📦 Installation
 
-### Automated Installation (Recommended)
+### Installation
 
 ```bash
 # Navigate to tool directory
 cd tools/CISCORESET
 
-# Run bootstrap script
-./bootstrap.sh
-
-# Activate virtual environment
-source venv/bin/activate
+# Create venv and install
+python3 -m venv .venv
+source .venv/bin/activate
+pip install .
 
 # Run tool
-python src/bootstrap.py
+ciscoreset
 ```
 
 ### Manual Installation

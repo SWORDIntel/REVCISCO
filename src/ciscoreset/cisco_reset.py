@@ -10,19 +10,19 @@ from pathlib import Path
 from typing import Optional
 
 # Import all modules
-from logging_monitor import LoggingMonitor
-from serial_connection import SerialConnection
-from prompt_detector import PromptDetector
-from retry_strategies import RetryManager
-from command_executor import CommandExecutor
-from recovery_state_machine import RecoveryStateMachine, RecoveryState
-from rommon_handler import RommonHandler
-from password_reset import PasswordReset
-from system_detector import SystemDetector
-from interactive_config import InteractiveConfig
-from config_backup import ConfigBackup
-from tui_interface import TUIInterface
-from settings_manager import SettingsManager
+from .logging_monitor import LoggingMonitor
+from .serial_connection import SerialConnection
+from .prompt_detector import PromptDetector
+from .retry_strategies import RetryManager
+from .command_executor import CommandExecutor
+from .recovery_state_machine import RecoveryStateMachine, RecoveryState
+from .rommon_handler import RommonHandler
+from .password_reset import PasswordReset
+from .system_detector import SystemDetector
+from .interactive_config import InteractiveConfig
+from .config_backup import ConfigBackup
+from .tui_interface import TUIInterface
+from .settings_manager import SettingsManager
 
 
 class CiscoReset:

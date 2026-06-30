@@ -100,7 +100,10 @@ class RecoveryStateMachine:
         self.state_history.append(transition_record)
         
         if self.logger:
-            self.logger.log_state_transition(old_state.value, new_state.value, reason)
+            if hasattr(self.logger, 'log_state_transition'):
+                self.logger.log_state_transition(old_state.value, new_state.value, reason)
+            else:
+                self.logger.info(f"State transition: {old_state.value} -> {new_state.value} ({reason})")
         
         return True
     

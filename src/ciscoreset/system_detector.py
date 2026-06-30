@@ -7,7 +7,7 @@ import json
 from datetime import datetime
 from typing import Dict, List, Optional, Any
 from pathlib import Path
-from command_executor import CommandExecutor
+from .command_executor import CommandExecutor
 
 
 class SystemDetector:

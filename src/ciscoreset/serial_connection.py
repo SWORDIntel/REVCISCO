@@ -43,8 +43,9 @@ class SerialConnection:
         self.connection_start_time: Optional[float] = None
         
     def detect_ports(self) -> List[str]:
-        """Detect available TTY ports"""
+        """Detect available TTY ports, prioritizing FT232RL adapters"""
         ports = []
+        ftdi_ports = []
         
         # Scan common TTY port patterns
         tty_patterns = ['/dev/ttyS*', '/dev/ttyUSB*', '/dev/ttyACM*']
@@ -58,15 +59,38 @@ class SerialConnection:
         try:
             pyserial_ports = serial.tools.list_ports.comports()
             for port_info in pyserial_ports:
+                # FT232RL VID=0x0403, PID=0x6001
+                # CH340 VID=0x1A86, PID=0x7523
+                # CP2102 VID=0x10C4, PID=0xEA60
+                # PL2303 VID=0x067B, PID=0x2303
+                # Bricked FTDI Clone VID=0x0403, PID=0x0000
+                priority_vids = {
+                    (0x0403, 0x6001): "FT232RL",
+                    (0x1A86, 0x7523): "CH340 (Clone)",
+                    (0x10C4, 0xEA60): "CP2102",
+                    (0x067B, 0x2303): "PL2303",
+                    (0x0403, 0x0000): "FT232RL Clone (Generic)"
+                }
+                
+                chip_name = priority_vids.get((port_info.vid, port_info.pid))
+                if chip_name:
+                    ftdi_ports.append(port_info.device)
+                    if self.logger:
+                        self.logger.info(f"Detected {chip_name} adapter on {port_info.device}")
+                
                 if port_info.device not in ports:
                     ports.append(port_info.device)
         except Exception as e:
             if self.logger:
                 self.logger.warning(f"Error listing ports with pyserial: {e}")
         
-        # Filter out non-existent ports and sort
+        # Filter out non-existent ports
         existing_ports = [p for p in ports if Path(p).exists()]
-        return sorted(set(existing_ports))
+        existing_ftdi = [p for p in ftdi_ports if Path(p).exists()]
+        
+        # Return FTDI ports first, then other ports
+        other_ports = sorted(set(existing_ports) - set(existing_ftdi))
+        return existing_ftdi + other_ports
     
     def select_port(self, ports: Optional[List[str]] = None) -> Optional[str]:
         """Select port from available ports"""

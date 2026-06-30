@@ -154,6 +154,17 @@ class MetricsCollector:
         return metrics
 
 
+
+import re as _re
+class SanitizedFormatter(logging.Formatter):
+    """Formatter that redacts sensitive strings such as passwords"""
+    def format(self, record: logging.LogRecord) -> str:
+        formatted = super().format(record)
+        # Redact common password patterns like 'secret 5 <hash>' or 'password <pass>'
+        formatted = _re.sub(r'(secret \d )\S+', r'\1***REDACTED***', formatted)
+        formatted = _re.sub(r'(password \d? ?)\S+', r'\1***REDACTED***', formatted)
+        return formatted
+
 class StructuredFormatter(logging.Formatter):
     """JSON formatter for structured logging"""
     
@@ -225,7 +236,7 @@ class LoggingMonitor:
         if self.enable_console:
             console_handler = logging.StreamHandler(sys.stdout)
             console_handler.setLevel(self.log_level)
-            console_formatter = logging.Formatter(
+            console_formatter = SanitizedFormatter(
                 '%(asctime)s.%(msecs)03d [%(levelname)-8s] %(name)s: %(message)s',
                 datefmt='%Y-%m-%d %H:%M:%S'
             )
@@ -241,7 +252,7 @@ class LoggingMonitor:
             encoding='utf-8'
         )
         file_handler.setLevel(logging.DEBUG)  # Always log everything to file
-        file_formatter = logging.Formatter(
+        file_formatter = SanitizedFormatter(
             '%(asctime)s.%(msecs)06d [%(levelname)-8s] %(name)s:%(module)s:%(funcName)s:%(lineno)d: %(message)s',
             datefmt='%Y-%m-%d %H:%M:%S'
         )
@@ -276,7 +287,7 @@ class LoggingMonitor:
             backupCount=30,
             encoding='utf-8'
         )
-        formatter = logging.Formatter(
+        formatter = SanitizedFormatter(
             '%(asctime)s.%(msecs)06d [%(direction)s] %(message)s',
             datefmt='%Y-%m-%d %H:%M:%S'
         )
@@ -299,7 +310,7 @@ class LoggingMonitor:
             backupCount=30,
             encoding='utf-8'
         )
-        formatter = logging.Formatter(
+        formatter = SanitizedFormatter(
             '%(asctime)s.%(msecs)06d [%(from_state)s -> %(to_state)s] %(reason)s',
             datefmt='%Y-%m-%d %H:%M:%S'
         )

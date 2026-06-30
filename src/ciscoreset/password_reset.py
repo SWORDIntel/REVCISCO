@@ -4,9 +4,9 @@ Interactive password reset workflow
 
 import getpass
 from typing import Optional, Tuple, Any
-from command_executor import CommandExecutor
-from prompt_detector import RouterState
-from recovery_state_machine import RecoveryState, RecoveryStateMachine
+from .command_executor import CommandExecutor
+from .prompt_detector import RouterState
+from .recovery_state_machine import RecoveryState, RecoveryStateMachine
 
 
 class PasswordReset:

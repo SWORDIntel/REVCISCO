@@ -5,8 +5,8 @@ Interactive configuration mode once config access is available
 import sys
 from typing import List, Optional, Callable, Any
 
-from command_executor import CommandExecutor
-from prompt_detector import RouterState
+from .command_executor import CommandExecutor
+from .prompt_detector import RouterState
 
 
 class InteractiveConfig:

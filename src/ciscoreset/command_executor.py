@@ -5,8 +5,8 @@ Robust command execution with retries and verification
 import time
 import re
 from typing import Optional, Tuple, List, Callable, Any
-from prompt_detector import PromptDetector, RouterState
-from retry_strategies import RetryManager, RetryConfig
+from .prompt_detector import PromptDetector, RouterState
+from .retry_strategies import RetryManager, RetryConfig
 
 
 class CommandExecutor:
